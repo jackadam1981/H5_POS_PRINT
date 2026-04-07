@@ -178,6 +178,50 @@ maxImageHeightMm = imageWidthMm \times \frac{16}{9}
 
 本节提供“能直接开工”的建议字段与示例。首版不强制完全一致，但建议尽量贴近，便于跨端复用（小程序 + Android H5）。
 
+### 模板（Template）字段约束（近似 Schema）
+
+> 目的：把“编辑器能存什么/打印端需要什么”说清楚，避免前后端/多端各自扩展导致不可兼容。
+
+- **通用**
+  - `unit`：固定 `"mm"`
+  - `canvas.widthMm`：\(0 < widthMm \le 110\)
+  - `canvas.heightMm`：\(> 0\)（建议产品层面设置可配置上限，如 300–500mm，并支持分页）
+  - `canvas.scalePolicy`：默认 `"fitWidth"`（定稿）
+  - `elements[]`：按 `zIndex`（或数组顺序）由低到高叠加
+
+- **元素通用字段**
+  - `id`：全局唯一字符串
+  - `type`：`"text" | "qrcode" | "barcode" | "image"`
+  - `xMm`, `yMm`：可为 0 或正数；建议限制在画布范围内（允许少量溢出以便裁切）
+  - `widthMm`, `heightMm`：\(> 0\)
+  - `rotationDeg`：\(-180, 180]\) 或 \([0, 360)\)（二者择一即可，内部统一归一化）
+
+- **Text**
+  - `text`：支持纯文本或 `{{field}}` 变量
+  - `textAlign`：`left | center | right`（对齐通过坐标计算实现，不依赖打印机命令）
+  - `font.family`：
+    - `"builtin"`：走机型内置字体映射（优先）
+    - `"custom"`：必须提供字体资源引用（走位图兜底）
+  - `font.sizeMm`：字号以 mm 表示（便于跨 DPI）
+  - `font.weight`：可选；仅影响位图渲染或映射到“粗体档位”时生效
+
+- **QRCode**
+  - `data`：支持 `{{field}}`
+  - `sizeMm`：正数；渲染时换算为 dot 并映射到 CPCL 的模块大小参数
+  - `ecc`：`L | M | Q | H`（首版可以只支持 L/M）
+
+- **Barcode**
+  - `symbology`：建议首版支持 `CODE128`（可扩展）
+  - `data`：支持 `{{field}}`
+  - `heightMm`：条码高度
+  - `humanReadable`：是否打印可读字符（可选）
+
+- **Image**
+  - `mode`：`logo | background | photo`（决定二值化/抖动/锐化策略）
+  - `src.kind`：`url | dataUri | r2Key`（建议至少 `url`/`dataUri`）
+  - **比例限制（定稿）**：`heightMm <= widthMm * 16/9`（9:16 宽高比）
+  - `opacity`：首版建议不支持（热敏打印最终是 1bpp）
+
 ### 模板（Template）JSON（示例）
 
 约定：
@@ -305,6 +349,54 @@ maxImageHeightMm = imageWidthMm \times \frac{16}{9}
   }
 }
 ```
+
+## 打印流水线（建议接口分层）
+
+> 目的：让“小程序端”和“Android H5 端”尽量复用核心逻辑，只替换传输实现。
+
+建议分层：
+
+1. **TemplateEngine**
+   - 输入：`template` + `data`（变量替换）
+   - 输出：`resolvedTemplate`（所有 `{{}}` 已替换）
+
+2. **LayoutScaler**
+   - 输入：`resolvedTemplate` + `printerProfile.printableWidthMm`
+   - 输出：`scaledTemplate`（按 `fitWidth` 缩放后的 mm 坐标）
+
+3. **Rasterizer（位图层）**
+   - 输入：`scaledTemplate`（挑选需位图的元素：图片、任意字体、任意角度旋转等）
+   - 输出：`bitmapSlices[]`（按 slice 切片的 1bpp 位图块，带位置与尺寸）
+
+4. **CPCLCompiler（指令层）**
+   - 输入：`scaledTemplate`（挑选可原生的元素：文本、码类等） + `bitmapSlices[]`
+   - 输出：`cpclJobBytes`（完整 CPCL 作业字节流）
+
+5. **Transport（传输层）**
+   - 输入：`cpclJobBytes` + `printerProfile.ble`
+   - 输出：打印结果（成功/失败原因分类、可重试）
+
+## CPCL 作业字节流组织（建议）
+
+> 不同厂商 CPCL 方言会在“作业头/结束命令/位图命令”上存在差异，建议通过 `printerProfile.cpclDialect` 收口。
+
+建议逻辑结构（概念级）：
+
+- **Job Header**
+  - 设置页面宽高（dot）
+  - 设置打印份数
+  - 初始化/清屏（若需要）
+
+- **Body**
+  - 先输出位图切片（背景/图片/任意旋转/任意字体）
+  - 再输出原生文本/二维码/条码（保证清晰与可扫）
+
+- **Job Footer**
+  - 结束作业并触发打印
+
+字符编码建议：
+- 文本默认按机型支持：GBK/UTF-8（由 profile 选择与转换）
+
 
 ## `fitWidth` 缩放算法（定稿细化）
 
@@ -466,4 +558,43 @@ mmToDotScale = mmToDotScale0 \times k
 ### 宽度适配
 
 - 模板 110mm 宽在 CC4(104mm) 上自动缩放并提示缩放比例
+
+## 机型认证流程（建议：生成/更新 printerProfile）
+
+> 目标：把“支持机型清单”变成可操作流程，而不是手工猜 UUID/参数。
+
+### 1. 发现与筛选
+
+- 小程序端扫描 BLE 设备
+- 通过设备名（如包含 `CC4`）与服务 UUID 粗筛（若已知）
+
+### 2. 连接与枚举 GATT
+
+- 连接成功后：
+  - 枚举 services
+  - 对每个 service 枚举 characteristics
+  - 记录每个 characteristic 的 properties（read/write/notify/indicate）
+
+### 3. 确认写入通道
+
+- 选择候选 `writeCharacteristicUUID`：
+  - 优先 `write` 或 `writeWithoutResponse` 的特征
+- 发送一段最小“测试作业”（例如仅打印一行文本或一个小 QR）
+- 若能成功出纸，则确认该 writeChar
+
+### 4. MTU / 分包参数探测
+
+- 若平台支持读取 MTU（或可观察吞吐/失败率）：
+  - 逐步增大 chunk（从 20 开始）直到出现失败，再回退
+  - 选择稳定的 `maxChunkBytes` 与 `packetIntervalMs`
+
+### 5. DPI / 比例标定
+
+- 打印 100mm 标尺
+- 实测长度，写入 `mmToDotScale`（或等效 dpi）
+
+### 6. 固化 profile
+
+- 输出/保存 `printerProfile`（云端下发或内置）
+- 将机型加入“已认证机型清单”
 
