@@ -62,9 +62,7 @@
 - 图片元素最大比例为 **9:16（宽:高，竖版）**
 - 对任意图片元素，按其当前宽度计算允许的最大高度：
 
-\[
-maxImageHeightMm = imageWidthMm \times \frac{16}{9}
-\]
+`maxImageHeightMm = imageWidthMm * (16 / 9)`
 
 当图片元素高度超过上限时：
 
@@ -83,11 +81,9 @@ maxImageHeightMm = imageWidthMm \times \frac{16}{9}
   - `supportsNativeQRCode`（建议 true）
   - `supportsNativeBarcode`（按业务）
   - `fontMap`（模板字体/字号到 CPCL 内置字库的映射规则）
-
 - **分辨率与标定**
   - `dpi` 或 `mmToDotScale`
   - 允许未知：通过“认证/校准流程”写入
-
 - **BLE 通道（小程序/Android H5 共用概念，不同实现）**
   - `ble.serviceUUID`
   - `ble.writeCharacteristicUUID`
@@ -184,18 +180,16 @@ maxImageHeightMm = imageWidthMm \times \frac{16}{9}
 
 - **通用**
   - `unit`：固定 `"mm"`
-  - `canvas.widthMm`：\(0 < widthMm \le 110\)
-  - `canvas.heightMm`：\(> 0\)（建议产品层面设置可配置上限，如 300–500mm，并支持分页）
+  - `canvas.widthMm`：`0 < widthMm <= 110`
+  - `canvas.heightMm`：`> 0`（建议产品层面设置可配置上限，如 300–500mm，并支持分页）
   - `canvas.scalePolicy`：默认 `"fitWidth"`（定稿）
   - `elements[]`：按 `zIndex`（或数组顺序）由低到高叠加
-
 - **元素通用字段**
   - `id`：全局唯一字符串
   - `type`：`"text" | "qrcode" | "barcode" | "image"`
   - `xMm`, `yMm`：可为 0 或正数；建议限制在画布范围内（允许少量溢出以便裁切）
-  - `widthMm`, `heightMm`：\(> 0\)
-  - `rotationDeg`：\(-180, 180]\) 或 \([0, 360)\)（二者择一即可，内部统一归一化）
-
+  - `widthMm`, `heightMm`：`> 0`
+  - `rotationDeg`：`(-180, 180]` 或 `[0, 360)`（二者择一即可，内部统一归一化）
 - **Text**
   - `text`：支持纯文本或 `{{field}}` 变量
   - `textAlign`：`left | center | right`（对齐通过坐标计算实现，不依赖打印机命令）
@@ -204,18 +198,15 @@ maxImageHeightMm = imageWidthMm \times \frac{16}{9}
     - `"custom"`：必须提供字体资源引用（走位图兜底）
   - `font.sizeMm`：字号以 mm 表示（便于跨 DPI）
   - `font.weight`：可选；仅影响位图渲染或映射到“粗体档位”时生效
-
 - **QRCode**
   - `data`：支持 `{{field}}`
   - `sizeMm`：正数；渲染时换算为 dot 并映射到 CPCL 的模块大小参数
   - `ecc`：`L | M | Q | H`（首版可以只支持 L/M）
-
 - **Barcode**
   - `symbology`：建议首版支持 `CODE128`（可扩展）
   - `data`：支持 `{{field}}`
   - `heightMm`：条码高度
   - `humanReadable`：是否打印可读字符（可选）
-
 - **Image**
   - `mode`：`logo | background | photo`（决定二值化/抖动/锐化策略）
   - `src.kind`：`url | dataUri | r2Key`（建议至少 `url`/`dataUri`）
@@ -357,24 +348,20 @@ maxImageHeightMm = imageWidthMm \times \frac{16}{9}
 建议分层：
 
 1. **TemplateEngine**
-   - 输入：`template` + `data`（变量替换）
-   - 输出：`resolvedTemplate`（所有 `{{}}` 已替换）
-
+  - 输入：`template` + `data`（变量替换）
+  - 输出：`resolvedTemplate`（所有 `{{}}` 已替换）
 2. **LayoutScaler**
-   - 输入：`resolvedTemplate` + `printerProfile.printableWidthMm`
-   - 输出：`scaledTemplate`（按 `fitWidth` 缩放后的 mm 坐标）
-
+  - 输入：`resolvedTemplate` + `printerProfile.printableWidthMm`
+  - 输出：`scaledTemplate`（按 `fitWidth` 缩放后的 mm 坐标）
 3. **Rasterizer（位图层）**
-   - 输入：`scaledTemplate`（挑选需位图的元素：图片、任意字体、任意角度旋转等）
-   - 输出：`bitmapSlices[]`（按 slice 切片的 1bpp 位图块，带位置与尺寸）
-
+  - 输入：`scaledTemplate`（挑选需位图的元素：图片、任意字体、任意角度旋转等）
+  - 输出：`bitmapSlices[]`（按 slice 切片的 1bpp 位图块，带位置与尺寸）
 4. **CPCLCompiler（指令层）**
-   - 输入：`scaledTemplate`（挑选可原生的元素：文本、码类等） + `bitmapSlices[]`
-   - 输出：`cpclJobBytes`（完整 CPCL 作业字节流）
-
+  - 输入：`scaledTemplate`（挑选可原生的元素：文本、码类等） + `bitmapSlices[]`
+  - 输出：`cpclJobBytes`（完整 CPCL 作业字节流）
 5. **Transport（传输层）**
-   - 输入：`cpclJobBytes` + `printerProfile.ble`
-   - 输出：打印结果（成功/失败原因分类、可重试）
+  - 输入：`cpclJobBytes` + `printerProfile.ble`
+  - 输出：打印结果（成功/失败原因分类、可重试）
 
 ## CPCL 作业字节流组织（建议）
 
@@ -386,17 +373,14 @@ maxImageHeightMm = imageWidthMm \times \frac{16}{9}
   - 设置页面宽高（dot）
   - 设置打印份数
   - 初始化/清屏（若需要）
-
 - **Body**
   - 先输出位图切片（背景/图片/任意旋转/任意字体）
   - 再输出原生文本/二维码/条码（保证清晰与可扫）
-
 - **Job Footer**
   - 结束作业并触发打印
 
 字符编码建议：
 - 文本默认按机型支持：GBK/UTF-8（由 profile 选择与转换）
-
 
 ## `fitWidth` 缩放算法（定稿细化）
 
@@ -407,9 +391,7 @@ maxImageHeightMm = imageWidthMm \times \frac{16}{9}
 
 缩放系数：
 
-\[
-scale = \min(1,\ \frac{printableWidthMm}{canvasWidthMm})
-\]
+`scale = min(1, printableWidthMm / canvasWidthMm)`
 
 对模板中所有元素应用：
 
@@ -424,15 +406,11 @@ scale = \min(1,\ \frac{printableWidthMm}{canvasWidthMm})
 
 ### 基本换算
 
-\[
-dots = mm \times \frac{dpi}{25.4}
-\]
+`dots = mm * (dpi / 25.4)`
 
 若采用标定值：
 
-\[
-dots = mm \times mmToDotScale
-\]
+`dots = mm * mmToDotScale`
 
 ### 标尺校准建议（落地）
 
@@ -440,15 +418,11 @@ dots = mm \times mmToDotScale
 - 实测打印长度 `measuredMm`
 - 校正系数：
 
-\[
-k = \frac{targetMm}{measuredMm}
-\]
+`k = targetMm / measuredMm`
 
 - 若已有临时 `mmToDotScale0`，更新为：
 
-\[
-mmToDotScale = mmToDotScale0 \times k
-\]
+`mmToDotScale = mmToDotScale0 * k`
 
 ## CPCL 子集（首版必须支持）
 
