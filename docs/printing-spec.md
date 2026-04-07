@@ -174,3 +174,296 @@ maxImageHeightMm = imageWidthMm \times \frac{16}{9}
 - 写入失败：分包超时/断连/特征不可写
 - 数据过大：提示缩小图片或改用更小背景；必要时提示拆分打印
 
+## 数据结构（建议）与示例
+
+本节提供“能直接开工”的建议字段与示例。首版不强制完全一致，但建议尽量贴近，便于跨端复用（小程序 + Android H5）。
+
+### 模板（Template）JSON（示例）
+
+约定：
+
+- 全部使用 mm（可小数），坐标系左上角 (0,0)
+- `rotationDeg` 允许任意角度（渲染时按规则选择“原生/位图兜底”）
+- 图片元素通过 `mode` 表示用途（logo/background/photo）以选择不同抖动/压缩策略
+
+```json
+{
+  "id": "tpl_demo_001",
+  "name": "CC4-示例模板",
+  "unit": "mm",
+  "canvas": {
+    "widthMm": 110,
+    "heightMm": 200,
+    "scalePolicy": "fitWidth"
+  },
+  "elements": [
+    {
+      "id": "img_bg",
+      "type": "image",
+      "xMm": 0,
+      "yMm": 0,
+      "widthMm": 104,
+      "heightMm": 185,
+      "rotationDeg": 0,
+      "mode": "background",
+      "src": {
+        "kind": "url",
+        "value": "https://example.com/assets/bg.png"
+      }
+    },
+    {
+      "id": "txt_title",
+      "type": "text",
+      "xMm": 6,
+      "yMm": 8,
+      "widthMm": 92,
+      "heightMm": 10,
+      "rotationDeg": 0,
+      "text": "{{name}}",
+      "textAlign": "left",
+      "font": {
+        "family": "builtin",
+        "sizeMm": 6,
+        "weight": 600
+      }
+    },
+    {
+      "id": "qr_1",
+      "type": "qrcode",
+      "xMm": 70,
+      "yMm": 120,
+      "sizeMm": 28,
+      "rotationDeg": 0,
+      "data": "{{qrcode}}",
+      "ecc": "M"
+    },
+    {
+      "id": "img_logo",
+      "type": "image",
+      "xMm": 6,
+      "yMm": 24,
+      "widthMm": 20,
+      "heightMm": 20,
+      "rotationDeg": 15,
+      "mode": "logo",
+      "src": {
+        "kind": "dataUri",
+        "value": "data:image/png;base64,...."
+      }
+    }
+  ],
+  "dataSchema": {
+    "name": { "type": "string", "required": true },
+    "qrcode": { "type": "string", "required": true }
+  }
+}
+```
+
+### 机型配置（Printer Profile）JSON（示例：CC4）
+
+说明：
+
+- `printableWidthMm`：机型“最大有效打印宽”
+- `dpi` 与 `mmToDotScale` 二选一即可（推荐最终落 `mmToDotScale`，更贴近实际标定）
+- `cpclDialect` 用于收口 CPCL 方言差异（不同厂商/型号可能命令参数略有区别）
+
+```json
+{
+  "id": "zicox_cc4",
+  "manufacturer": "ZICOX",
+  "model": "CC4",
+  "protocol": "CPCL",
+  "printableWidthMm": 104,
+  "supportsNativeQRCode": true,
+  "supportsNativeBarcode": true,
+  "dpi": null,
+  "mmToDotScale": null,
+  "fontMap": {
+    "builtin": {
+      "sizesMm": [3, 4, 6, 8],
+      "notes": "优先映射到 CC4 内置 ASCII/GBK 字库档位；不匹配时走位图"
+    }
+  },
+  "imageConstraints": {
+    "maxAspect": { "w": 9, "h": 16 }
+  },
+  "cpclDialect": {
+    "textRotationNative": [0, 90, 180, 270],
+    "qrNative": true
+  },
+  "ble": {
+    "serviceUUID": null,
+    "writeCharacteristicUUID": null,
+    "notifyCharacteristicUUID": null,
+    "writeMode": "withResponse",
+    "packetIntervalMs": 20,
+    "maxChunkBytes": null,
+    "retry": {
+      "maxAttempts": 3,
+      "backoffMs": [100, 200, 400]
+    }
+  }
+}
+```
+
+## `fitWidth` 缩放算法（定稿细化）
+
+设：
+
+- 模板画布宽：`canvasWidthMm`
+- 机型可打印宽：`printableWidthMm`
+
+缩放系数：
+
+\[
+scale = \min(1,\ \frac{printableWidthMm}{canvasWidthMm})
+\]
+
+对模板中所有元素应用：
+
+- `xMm *= scale`
+- `yMm *= scale`
+- `widthMm *= scale`
+- `heightMm *= scale`
+
+对文本字号（若使用 mm 表示字号）同样按比例缩放；若最终字体映射无法满足，则降级为位图渲染。
+
+## mm → dot 换算与校准
+
+### 基本换算
+
+\[
+dots = mm \times \frac{dpi}{25.4}
+\]
+
+若采用标定值：
+
+\[
+dots = mm \times mmToDotScale
+\]
+
+### 标尺校准建议（落地）
+
+- 打印一条标尺：目标长度 `targetMm = 100`
+- 实测打印长度 `measuredMm`
+- 校正系数：
+
+\[
+k = \frac{targetMm}{measuredMm}
+\]
+
+- 若已有临时 `mmToDotScale0`，更新为：
+
+\[
+mmToDotScale = mmToDotScale0 \times k
+\]
+
+## CPCL 子集（首版必须支持）
+
+首版仅定义“需要的 CPCL 能力子集”，避免后续扩展时出现不可控差异。
+
+### 页面与作业控制
+
+- 设置页面/标签尺寸（宽高，单位为 dot）
+- 设置打印份数
+- 走纸/结束作业（根据机型方言做适配）
+
+### 文本（原生优先）
+
+- 支持 ASCII + GBK（由机型内置字库决定）
+- 支持旋转：0/90/180/270（其余角度走位图）
+- 对齐：编辑器对齐最终体现为坐标计算，不依赖打印机“对齐命令”
+
+### 二维码/条码（原生优先）
+
+- QRCode（原生命令）
+- CODE128（或业务需要的一维码集合）
+
+### 位图（图片元素必需）
+
+- 支持将图片元素输出为单色位图并打印
+- 支持切片打印（按行/按块）
+
+## 元素到输出的映射规则（定稿细化）
+
+### Text
+
+- 满足以下条件时走 CPCL 原生：
+  - `rotationDeg` 属于 {0,90,180,270}
+  - 字体为 `builtin` 且字号可映射
+- 否则：转位图（文字渲染为黑白位图）并走位图打印
+
+### QRCode / Barcode
+
+- 若机型 `supportsNativeQRCode/Barcode` 为 true：走原生命令
+- 否则：转位图（不推荐，但作为兜底）
+
+### Image
+
+- 永远走位图打印
+- 处理模式：
+  - `logo`：优先保边缘、少抖动
+  - `background`：抖动更均匀，避免大块黑糊
+  - `photo`：更强抖动/灰度映射（更慢，需提示）
+
+## 图片位图化与切片发送（建议）
+
+### 位图基础约束
+
+- 输出为 1bpp（黑/白）
+- 图片元素必须满足最大比例 9:16（宽:高）；超限时编辑器端先等比缩放
+
+### 切片策略（推荐按“行切片”）
+
+将位图按固定行高切片（例如 16 或 24 dot 高一片），每片作为独立位图块打印，以降低单次写入的数据量与失败重试成本。
+
+建议：
+
+- `sliceHeightDots`：可在 `printerProfile` 配置（不同机型吞吐不同）
+- 切片时保持 X/Y 偏移一致，按 slice 累加 Y
+
+## BLE 传输约定（小程序 + Android H5）
+
+本节定义“可靠发送”的共识规则。具体 MTU/写入模式由 `printerProfile.ble` 覆盖。
+
+### 小程序（wx.* BLE）
+
+- 使用 `wx.writeBLECharacteristicValue`
+- 建议默认 `withResponse`（更稳），并通过 `packetIntervalMs` 节流
+- 分包大小：
+  - 若可获取 MTU：使用 `ATT_MTU - 3`
+  - 否则以 profile 配置或保守值（例如 20 字节）为准
+
+### Android H5（Web Bluetooth）
+
+- `navigator.bluetooth.requestDevice`（必须用户手势触发）
+- 连接后通过 GATT 获取可写特征，写入采用 chunk + 节流
+- 仅作为补充通道，能力与表现不作为 iOS 主通道承诺
+
+## 验收用例（建议首批必测）
+
+### 连接与稳定性
+
+- 首次扫描→连接成功（10 次中 ≥ 9 次）
+- 断连后重连成功
+
+### 文本
+
+- 中英文混排（GBK/ASCII）
+- 多字号（通过内置映射）
+- 0/90/180/270 旋转
+
+### 二维码
+
+- QRCode（打印后可被主流扫码器识别）
+
+### 图片
+
+- 小 Logo（mode=logo）清晰可辨
+- 大背景（mode=background）不出现明显断层（允许抖动纹理）
+- 照片（mode=photo）可接受（允许较慢，需 UI 提示）
+
+### 宽度适配
+
+- 模板 110mm 宽在 CC4(104mm) 上自动缩放并提示缩放比例
+
