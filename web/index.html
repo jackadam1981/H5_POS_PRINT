@@ -29,6 +29,9 @@
         <button id="btnDiscover" disabled>枚举服务/特征</button>
       </div>
       <div class="row">
+        <div class="muted">状态：<span id="status">未连接</span></div>
+      </div>
+      <div class="row">
         <label>Service
           <select id="selService" disabled></select>
         </label>
@@ -47,15 +50,21 @@
       <div class="row">
         <label>name <input id="name" type="text" value="World" /></label>
         <label>qrcode <input id="qrcode" type="text" value="https://example.com" size="28" /></label>
+        <label>protocol
+          <select id="protocol">
+            <option value="CPCL" selected>CPCL（标签）</option>
+            <option value="ESCPOS">ESC/POS（小票）</option>
+          </select>
+        </label>
       </div>
       <div class="row">
-        <button id="btnSend" disabled>发送 CPCL（文本+二维码）</button>
+        <button id="btnSend" disabled>发送打印数据</button>
       </div>
     </div>
 
     <pre id="log"></pre>
 
-    <script type="module" src="/main.ts"></script>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
 

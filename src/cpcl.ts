@@ -7,7 +7,7 @@ import type {
   TemplateTextElement,
 } from "./types";
 import { mmToDots, roundDots } from "./mm.js";
-import { bitmap1bppToHexLines } from "./raster.js";
+import { bitmap1bppToHexLines, padToByteWidthDots } from "./bitmap.js";
 
 export type CpclCompileResult = {
   bytes: Uint8Array;
@@ -98,10 +98,7 @@ function joinBytes(parts: (Uint8Array | string)[]): Uint8Array {
   return out;
 }
 
-function padToByteWidthDots(widthDots: number): number {
-  // EG expects width in bytes; any extra bits on the right are treated as padding.
-  return Math.ceil(widthDots / 8) * 8;
-}
+// (padToByteWidthDots imported from ./bitmap.js)
 
 /**
  * CPCL compilation (concept-level): builds a CPCL job containing:

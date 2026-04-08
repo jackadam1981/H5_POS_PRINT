@@ -122,6 +122,8 @@ export interface PrinterProfile {
   };
 }
 
+export type PrinterProtocol = PrinterProfile["protocol"];
+
 export interface PrintJobInput {
   template: Template;
   data: Record<string, unknown>;

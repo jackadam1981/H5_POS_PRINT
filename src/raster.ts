@@ -2,6 +2,7 @@ import type { PrinterProfile, TemplateImageElement, TemplateResolved } from "./t
 import type { RasterImageSlice } from "./cpcl.js";
 import { mmToDots, roundDots } from "./mm.js";
 import { PNG } from "pngjs";
+import { bitmap1bppToHexLines } from "./bitmap.js";
 
 export type DitherMode = "threshold" | "floydSteinberg";
 export type ImageMode = "logo" | "background" | "photo";
@@ -183,42 +184,7 @@ export function slice1bppBitmap(params: {
   return slices;
 }
 
-function hexByte(b: number): string {
-  return b.toString(16).padStart(2, "0").toUpperCase();
-}
-
-export function bitmap1bppToHexLines(params: {
-  /** Packed 1bpp, row-major, MSB first. Width may be non-byte-aligned. */
-  bitmap: Uint8Array;
-  widthDots: number;
-  heightDots: number;
-  paddedWidthDots: number;
-  /** Bytes per line, default 64 (128 hex chars). */
-  bytesPerLine?: number;
-}): string[] {
-  const paddedWidthDots = params.paddedWidthDots;
-  if (paddedWidthDots % 8 !== 0) throw new Error("paddedWidthDots must be multiple of 8");
-  const rowBytes = paddedWidthDots / 8;
-  const expectedLen = rowBytes * params.heightDots;
-  if (params.bitmap.length !== expectedLen) {
-    throw new Error(`bitmap length mismatch: got ${params.bitmap.length}, expected ${expectedLen}`);
-  }
-  const bytesPerLine = params.bytesPerLine ?? 64;
-  const lines: string[] = [];
-  let current = "";
-  let count = 0;
-  for (let i = 0; i < params.bitmap.length; i++) {
-    current += hexByte(params.bitmap[i]!);
-    count++;
-    if (count >= bytesPerLine) {
-      lines.push(current);
-      current = "";
-      count = 0;
-    }
-  }
-  if (current.length) lines.push(current);
-  return lines;
-}
+export { bitmap1bppToHexLines };
 
 function parseDataUriPng(dataUri: string): { width: number; height: number; rgba: Uint8Array } {
   const m = /^data:image\/png(?:;charset=[^;]+)?;base64,(.+)$/i.exec(dataUri);
