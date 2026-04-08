@@ -6,7 +6,8 @@ import type {
   TemplateResolved,
   TemplateTextElement,
 } from "./types";
-import { mmToDots, roundDots } from "./mm";
+import { mmToDots, roundDots } from "./mm.js";
+import { bitmap1bppToHexLines } from "./raster.js";
 
 export type CpclCompileResult = {
   bytes: Uint8Array;
@@ -97,6 +98,11 @@ function joinBytes(parts: (Uint8Array | string)[]): Uint8Array {
   return out;
 }
 
+function padToByteWidthDots(widthDots: number): number {
+  // EG expects width in bytes; any extra bits on the right are treated as padding.
+  return Math.ceil(widthDots / 8) * 8;
+}
+
 /**
  * CPCL compilation (concept-level): builds a CPCL job containing:
  * - raster slices (if provided)
@@ -139,16 +145,30 @@ export function compileCpclJob(params: {
   // Body: raster slices first (background), then native primitives.
   const slices = params.rasterPlan?.slices ?? [];
   for (const s of slices) {
-    // Placeholders: real CPCL bitmap commands vary (EG/CG/PCX). We keep a marker to be replaced
-    // when implementing a specific ZICOX CC4 bitmap command.
-    // Use a sentinel directive that our transport layer can strip, or replace in a dialect handler.
-    lines.push(
-      `;RASTER_SLICE x=${roundDots(mmToDots(profile, s.xMm))} y=${roundDots(
-        mmToDots(profile, s.yMm),
-      )} wDots=${s.widthDots} hDots=${s.heightDots} bytes=${s.bitmap.length}\r\n`,
-    );
-    // Append raw bitmap bytes right after marker to keep single stream contract.
-    lines.push(s.bitmap);
+    const x = roundDots(mmToDots(profile, s.xMm));
+    const y = roundDots(mmToDots(profile, s.yMm));
+
+    // CPCL EG: EG <widthBytes> <height> <x> <y> <hexdata...>
+    // - widthBytes is padded to full bytes (8 dots per byte)
+    // - hex data is (widthBytes * height) bytes, encoded as hex chars (2 per byte), row-major
+    const paddedWidthDots = padToByteWidthDots(s.widthDots);
+    const widthBytes = paddedWidthDots / 8;
+    const hexLines = bitmap1bppToHexLines({
+      bitmap: s.bitmap,
+      widthDots: s.widthDots,
+      heightDots: s.heightDots,
+      paddedWidthDots,
+    });
+
+    lines.push(`EG ${widthBytes} ${s.heightDots} ${x} ${y} `);
+    // Historically many printers accept the hex stream on the same line (terminated by CRLF).
+    // To keep chunking more friendly, we emit it as multiple lines but without breaking the byte stream:
+    // "EG ... " + <hex...> + CRLF. Each extra CRLF becomes whitespace for the parser on many dialects.
+    // If a dialect is strict, set a dialect flag and join into a single line later.
+    for (let i = 0; i < hexLines.length; i++) {
+      lines.push(hexLines[i]!);
+      if (i < hexLines.length - 1) lines.push(`\r\n`);
+    }
     lines.push(`\r\n`);
   }
 

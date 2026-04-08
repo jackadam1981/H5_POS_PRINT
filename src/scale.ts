@@ -1,4 +1,4 @@
-import type { PrinterProfile, Template } from "./types";
+import type { PrinterProfile, Template } from "./types.js";
 
 export type FitWidthResult = {
   scale: number;

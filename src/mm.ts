@@ -1,4 +1,4 @@
-import type { PrinterProfile } from "./types";
+import type { PrinterProfile } from "./types.js";
 
 export function mmToDots(profile: PrinterProfile, mm: number): number {
   const scale = profile.mmToDotScale ?? (profile.dpi != null ? profile.dpi / 25.4 : null);

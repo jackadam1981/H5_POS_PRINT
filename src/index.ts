@@ -1,1 +1,1 @@
-export * from "./printing";
+export * from "./printing.js";

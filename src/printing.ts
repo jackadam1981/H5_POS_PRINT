@@ -1,7 +1,8 @@
-import type { PreparedJob, PrintJobInput, PrinterProfile, Template } from "./types";
-import { resolveTemplate } from "./template";
-import { applyFitWidth } from "./scale";
-import { compileCpclJob } from "./cpcl";
+import type { PreparedJob, PrintJobInput, PrinterProfile, Template } from "./types.js";
+import { resolveTemplate } from "./template.js";
+import { applyFitWidth } from "./scale.js";
+import { compileCpclJob } from "./cpcl.js";
+import { rasterizeTemplateToSlices } from "./raster.js";
 
 /**
  * Prepare a printable CPCL job bytes stream.
@@ -16,14 +17,16 @@ export function prepareCpclPrintJob(input: PrintJobInput): PreparedJob {
   const resolved = resolveTemplate(input.template, input.data);
   const { scale, scaled } = applyFitWidth(resolved, input.printerProfile);
 
+  const rasterPlan = rasterizeTemplateToSlices({
+    template: scaled,
+    profile: input.printerProfile,
+  });
+
   const compiled = compileCpclJob({
     template: scaled,
     profile: input.printerProfile,
     copies,
-    rasterPlan: {
-      slices: [],
-      rasterRequiredCount: { image: 0, text: 0 },
-    },
+    rasterPlan,
   });
 
   return {

@@ -1,4 +1,4 @@
-import type { PrinterProfile } from './types';
+import type { PrinterProfile } from "./types.js";
 
 export type TransportWriteOptions = {
   /** Chunk size in bytes. If omitted, uses profile.ble.maxChunkBytes or 20. */

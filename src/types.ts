@@ -138,3 +138,16 @@ export interface TemplateResolved extends Omit<Template, "elements"> {
   elements: TemplateResolvedElement[];
 }
 
+export type RasterizeMode = "logo" | "background" | "photo";
+
+export type RasterImageSlice = {
+  xMm: number;
+  yMm: number;
+  /** Width in dots (pixels). Must be a multiple of 8. */
+  widthDots: number;
+  /** Height in dots (pixels). */
+  heightDots: number;
+  /** 1bpp bitmap, row-major, bytes per row = widthDots/8. */
+  bitmap1bpp: Uint8Array;
+};
+

@@ -1,4 +1,4 @@
-import type { Template, TemplateElement, TemplateResolved, TemplateResolvedElement } from "./types";
+import type { Template, TemplateElement, TemplateResolved, TemplateResolvedElement } from "./types.js";
 
 const VAR_RE = /\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g;
 
