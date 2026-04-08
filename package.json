@@ -18,7 +18,8 @@
     "@types/node": "^25.5.2",
     "@types/pngjs": "^6.0.5",
     "typescript": "^5.9.2",
-    "vite": "^8.0.7"
+    "vite": "^8.0.7",
+    "wrangler": "^4.81.0"
   },
   "dependencies": {
     "pngjs": "^7.0.0"
