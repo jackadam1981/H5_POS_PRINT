@@ -82,7 +82,7 @@ export interface PrinterProfile {
   id: string;
   manufacturer: string;
   model: string;
-  protocol: "CPCL";
+  protocol: "CPCL" | "ESCPOS";
   printableWidthMm: Mm;
   supportsNativeQRCode: boolean;
   supportsNativeBarcode: boolean;
@@ -99,6 +99,13 @@ export interface PrinterProfile {
   cpclDialect?: {
     textRotationNative?: number[]; // e.g. [0,90,180,270]
     qrNative?: boolean;
+  };
+
+  escposDialect?: {
+    /** Whether printer supports GS ( V (partial/full cut). */
+    cut?: boolean;
+    /** Preferred codepage for non-ASCII (implementation-specific). */
+    codepage?: number | null;
   };
 
   ble: {
@@ -129,6 +136,7 @@ export interface PreparedJob {
     canvasWidthMm: number;
     printableWidthMm: number;
     copies: number;
+    protocol: "CPCL" | "ESCPOS";
   };
 }
 

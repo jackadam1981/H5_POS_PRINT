@@ -3,6 +3,7 @@ import { resolveTemplate } from "./template.js";
 import { applyFitWidth } from "./scale.js";
 import { compileCpclJob } from "./cpcl.js";
 import { rasterizeTemplateToSlices } from "./raster.js";
+import { compileEscPosReceipt } from "./escpos.js";
 
 /**
  * Prepare a printable CPCL job bytes stream.
@@ -36,6 +37,43 @@ export function prepareCpclPrintJob(input: PrintJobInput): PreparedJob {
       canvasWidthMm: input.template.canvas.widthMm,
       printableWidthMm: input.printerProfile.printableWidthMm,
       copies,
+      protocol: "CPCL",
+    },
+  };
+}
+
+/**
+ * Unified entry: choose protocol compiler by printer profile.
+ */
+export function preparePrintJob(input: PrintJobInput): PreparedJob {
+  if (input.printerProfile.protocol === "CPCL") return prepareCpclPrintJob(input);
+
+  // ESC/POS receipts: treat template's elements as "lines" for now (MVP).
+  // The full receipt layout engine (chars-per-line, wrapping, columns, QR, etc.) is next iteration.
+  const resolved = resolveTemplate(input.template, input.data);
+  const lines = resolved.elements
+    .filter((e) => e.type === "text")
+    .map((t) => {
+      const textEl = t as any;
+      return {
+        text: String(textEl.text ?? ""),
+        align: textEl.textAlign ?? "left",
+        bold: (textEl.font?.weight ?? 400) >= 600,
+        sizeW: 1 as const,
+        sizeH: 1 as const,
+      };
+    });
+
+  const compiledBytes = compileEscPosReceipt(lines, { feedLines: 3, finalLf: true });
+
+  return {
+    bytes: compiledBytes,
+    meta: {
+      scale: 1,
+      canvasWidthMm: input.template.canvas.widthMm,
+      printableWidthMm: input.printerProfile.printableWidthMm,
+      copies: input.copies ?? 1,
+      protocol: "ESCPOS",
     },
   };
 }

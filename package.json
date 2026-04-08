@@ -9,13 +9,16 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json",
     "demo": "node --enable-source-maps dist/demo.js",
+    "web:dev": "vite --config web/vite.config.ts",
+    "web:build": "vite build --config web/vite.config.ts",
     "lint": "node -e \"console.log('no lint configured')\"",
     "test": "node -e \"console.log('no tests configured')\""
   },
   "devDependencies": {
     "@types/node": "^25.5.2",
     "@types/pngjs": "^6.0.5",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vite": "^8.0.7"
   },
   "dependencies": {
     "pngjs": "^7.0.0"

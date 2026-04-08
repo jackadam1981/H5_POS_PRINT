@@ -1,5 +1,5 @@
 import { chunkBytes } from "./transport.js";
-import { prepareCpclPrintJob } from "./printing.js";
+import { preparePrintJob } from "./printing.js";
 import type { PrinterProfile, Template } from "./types.js";
 import { PNG } from "pngjs";
 
@@ -84,7 +84,7 @@ const profile: PrinterProfile = {
   },
 };
 
-const job = prepareCpclPrintJob({
+const job = preparePrintJob({
   template: tpl,
   data: { name: "World", qrcode: "https://example.com" },
   printerProfile: profile,

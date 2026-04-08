@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>H5 Web Bluetooth CPCL Test</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 16px; }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+      button { padding: 10px 12px; }
+      input, select { padding: 8px; }
+      pre { background: #0b1020; color: #e6e6e6; padding: 12px; overflow: auto; max-height: 360px; }
+      .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+      .muted { color: #666; }
+      label { display: inline-flex; gap: 8px; align-items: center; }
+    </style>
+  </head>
+  <body>
+    <h2>Android H5（Web Bluetooth）打印测试</h2>
+    <p class="muted">
+      仅用于测试：连接 BLE 打印机 → 选择可写特征值 → 发送 CPCL 字节流（分包 + 节流）。
+      需要 HTTPS 或本地 localhost。
+    </p>
+
+    <div class="card">
+      <div class="row">
+        <button id="btnConnect">连接设备</button>
+        <button id="btnDisconnect" disabled>断开</button>
+        <button id="btnDiscover" disabled>枚举服务/特征</button>
+      </div>
+      <div class="row">
+        <label>Service
+          <select id="selService" disabled></select>
+        </label>
+        <label>Write Characteristic
+          <select id="selWriteChar" disabled></select>
+        </label>
+      </div>
+      <div class="row">
+        <label>chunkBytes <input id="chunkBytes" type="number" value="20" min="1" max="512" /></label>
+        <label>intervalMs <input id="intervalMs" type="number" value="20" min="0" max="500" /></label>
+        <label>copies <input id="copies" type="number" value="1" min="1" max="10" /></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <label>name <input id="name" type="text" value="World" /></label>
+        <label>qrcode <input id="qrcode" type="text" value="https://example.com" size="28" /></label>
+      </div>
+      <div class="row">
+        <button id="btnSend" disabled>发送 CPCL（文本+二维码）</button>
+      </div>
+    </div>
+
+    <pre id="log"></pre>
+
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>
+
