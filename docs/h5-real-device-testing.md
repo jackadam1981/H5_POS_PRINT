@@ -39,6 +39,8 @@ npm run web:dev
 
 你已经决定使用 Cloudflare（Workers & Pages 入口）并用 GitHub Actions 自动部署。
 
+> 如果你还没有完成 Cloudflare / GitHub 的基础配置，建议先看：[`docs/cloudflare-deployment-checklist.md`](./cloudflare-deployment-checklist.md)
+
 ### 2.1 需要准备的 Cloudflare 配置
 
 - **Cloudflare 账号**
@@ -114,7 +116,7 @@ Pages：
 
 **可选：**
 
-- `CLOUDFLARE_PAGES_PROJECT_NAME`：Pages 项目名称；未设置时默认当前仓库名
+- `CLOUDFLARE_PAGES_PROJECT_NAME`：Pages 项目名称；未设置时默认 `h5-pos-print`
 - `CLOUDFLARE_PAGES_DEPLOY_DIR`：Pages 发布目录；未设置时按 `dist-web`、`site`、`public` 顺序查找
 - `CLOUDFLARE_WORKERS_WORKING_DIRECTORY`：Workers 发布工作目录
 - `CLOUDFLARE_WORKERS_BASE_NAME`：Workers 预览环境的基础名称，默认 `h5-pos-print`

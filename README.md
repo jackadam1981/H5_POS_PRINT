@@ -9,6 +9,8 @@
 
 ## GitHub Actions 部署
 
+完整配置步骤与上线检查项见：[`docs/cloudflare-deployment-checklist.md`](docs/cloudflare-deployment-checklist.md)
+
 仓库使用两个独立 workflow：
 
 - `.github/workflows/deploy-pages.yml`
@@ -42,6 +44,15 @@
 - 如需修改 preview Worker 的名称前缀，可设置 `CLOUDFLARE_WORKERS_BASE_NAME`
 
 ## 文档索引
+
+### 部署与联调
+
+- [`docs/cloudflare-deployment-checklist.md`](docs/cloudflare-deployment-checklist.md)
+  - Cloudflare / GitHub Actions 的落地配置清单
+  - 适合第一次把 Pages + Workers 自动部署真正跑通
+- [`docs/h5-real-device-testing.md`](docs/h5-real-device-testing.md)
+  - Android 真机 Web Bluetooth 测试说明
+  - 适合部署完成后做公网 HTTPS 联调
 
 ### 方案规格
 
