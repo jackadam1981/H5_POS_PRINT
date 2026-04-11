@@ -70,7 +70,7 @@ secrets.CLOUDFLARE_ACCOUNT_ID
 
 若你改为使用 **Environment secrets**，请同时修改 workflow：在 `deploy` job 下增加 `environment: 你的环境名`，否则 job 读不到 Environment 里的 secrets。
 
-Workers workflow 默认按 `wrangler.toml` 中的名称部署，也可通过变量覆盖 deploy 命令。
+Workers workflow 在 `main` 分支按 `wrangler.toml` 中的名称部署；在 `cursor/**` 分支会自动派生隔离的 Worker 名称，避免覆盖生产环境。也可通过变量覆盖 deploy 命令。
 
 > 如果你使用自定义域名，还需要在 Cloudflare DNS/域名里完成解析与 HTTPS 证书验证（Cloudflare 会自动处理大多数情况）。
 
@@ -88,16 +88,20 @@ Workers workflow 默认按 `wrangler.toml` 中的名称部署，也可通过变�
 
 Workers：
 
-- 默认按 `main` 分支自动部署
-- 若需调整工作目录或 deploy 命令，可使用仓库变量：
+- `main`：发布到 `wrangler.toml` 中声明的正式 Worker 名称
+- `cursor/**`：自动发布到派生的预览 Worker 名称，避免覆盖正式 Worker
+- 若需调整工作目录、基础 Worker 名称或 deploy 命令，可使用仓库变量：
   - `CLOUDFLARE_WORKERS_WORKING_DIRECTORY`
+  - `CLOUDFLARE_WORKERS_BASE_NAME`
   - `CLOUDFLARE_WORKERS_DEPLOY_COMMAND`
 
 Pages：
 
+- `main`：作为生产部署分支
+- `cursor/**`：作为 preview 部署分支
 - **需在 Cloudflare 控制台先创建同名 Pages 项目**
 - 默认使用 `dist-web` 作为发布目录
-- 默认项目名取仓库变量 `CLOUDFLARE_PAGES_PROJECT_NAME`，未设置时退回当前仓库名
+- 默认项目名取仓库变量 `CLOUDFLARE_PAGES_PROJECT_NAME`，未设置时使用 `h5-pos-print`
 
 ### 2.4 Actions 工作流读取的密钥（与 2.2 对应）
 
@@ -113,6 +117,7 @@ Pages：
 - `CLOUDFLARE_PAGES_PROJECT_NAME`：Pages 项目名称；未设置时默认当前仓库名
 - `CLOUDFLARE_PAGES_DEPLOY_DIR`：Pages 发布目录；未设置时按 `dist-web`、`site`、`public` 顺序查找
 - `CLOUDFLARE_WORKERS_WORKING_DIRECTORY`：Workers 发布工作目录
+- `CLOUDFLARE_WORKERS_BASE_NAME`：Workers 预览环境的基础名称，默认 `h5-pos-print`
 - `CLOUDFLARE_WORKERS_DEPLOY_COMMAND`：Workers 自定义 deploy 命令
 
 若未设置上述可选变量，当前仓库也可以按默认配置直接部署。

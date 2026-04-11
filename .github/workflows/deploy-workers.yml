@@ -45,6 +45,8 @@ jobs:
           fi
 
           deploy_command="${{ vars.CLOUDFLARE_WORKERS_DEPLOY_COMMAND }}"
+          worker_name=""
+          ref_name="${GITHUB_REF_NAME}"
           if [[ -z "$deploy_command" ]]; then
             config_file=""
             for candidate in wrangler.toml wrangler.jsonc wrangler.json; do
@@ -61,16 +63,42 @@ jobs:
               exit 0
             fi
 
-            deploy_command="deploy --config $config_file"
+            if [[ "$ref_name" == "main" ]]; then
+              deploy_command="deploy --config $config_file"
+            else
+              safe_ref="$(echo "$ref_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g' | sed -E 's/^-+|-+$//g')"
+              safe_ref="${safe_ref:0:40}"
+              if [[ -z "$safe_ref" ]]; then
+                safe_ref="preview"
+              fi
+
+              base_name="${{ vars.CLOUDFLARE_WORKERS_BASE_NAME }}"
+              if [[ -z "$base_name" ]]; then
+                base_name="h5-pos-print"
+              fi
+
+              worker_name="$base_name-$safe_ref"
+              deploy_command="deploy --config $config_file --name $worker_name"
+            fi
           fi
 
           echo "should_deploy=true" >> "$GITHUB_OUTPUT"
           echo "working_directory=$working_directory" >> "$GITHUB_OUTPUT"
           echo "deploy_command=$deploy_command" >> "$GITHUB_OUTPUT"
+          echo "worker_name=$worker_name" >> "$GITHUB_OUTPUT"
 
       - name: Skip Worker deployment
         if: steps.resolve.outputs.should_deploy != 'true'
         run: echo "Skipping Worker deployment because no Wrangler config or deploy command is configured yet."
+
+      - name: Show Worker target
+        if: steps.resolve.outputs.should_deploy == 'true'
+        run: |
+          if [[ -n "${{ steps.resolve.outputs.worker_name }}" ]]; then
+            echo "Deploying preview Worker: ${{ steps.resolve.outputs.worker_name }}"
+          else
+            echo "Deploying production Worker from Wrangler config."
+          fi
 
       - name: Deploy Worker
         if: steps.resolve.outputs.should_deploy == 'true'

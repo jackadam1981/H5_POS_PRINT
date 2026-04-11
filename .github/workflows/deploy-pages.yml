@@ -62,13 +62,28 @@ jobs:
             project_name="h5-pos-print"
           fi
 
+          branch_name="${GITHUB_REF_NAME}"
+          if [[ "$branch_name" == "main" ]]; then
+            deploy_branch="main"
+          else
+            deploy_branch="$branch_name"
+          fi
+
           echo "should_deploy=true" >> "$GITHUB_OUTPUT"
           echo "deploy_dir=$deploy_dir" >> "$GITHUB_OUTPUT"
           echo "project_name=$project_name" >> "$GITHUB_OUTPUT"
+          echo "deploy_branch=$deploy_branch" >> "$GITHUB_OUTPUT"
 
       - name: Skip Pages deployment
         if: steps.resolve.outputs.should_deploy != 'true'
         run: echo "Skipping Pages deployment because no deploy directory is configured yet."
+
+      - name: Print Pages deploy plan
+        if: steps.resolve.outputs.should_deploy == 'true'
+        run: |
+          echo "Cloudflare Pages project: ${{ steps.resolve.outputs.project_name }}"
+          echo "Deploy directory: ${{ steps.resolve.outputs.deploy_dir }}"
+          echo "Deploy branch: ${{ steps.resolve.outputs.deploy_branch }}"
 
       - name: Deploy Pages
         if: steps.resolve.outputs.should_deploy == 'true'
@@ -80,4 +95,4 @@ jobs:
           command: >-
             pages deploy ${{ steps.resolve.outputs.deploy_dir }}
             --project-name=${{ steps.resolve.outputs.project_name }}
-            --branch=${{ github.ref_name }}
+            --branch=${{ steps.resolve.outputs.deploy_branch }}

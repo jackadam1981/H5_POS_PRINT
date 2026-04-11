@@ -9,28 +9,37 @@
 
 ## GitHub Actions 部署
 
-仓库已拆分为两个独立 workflow：
+仓库使用两个独立 workflow：
 
 - `.github/workflows/deploy-pages.yml`
-  - 仅负责 Cloudflare Pages 发布
-  - 负责 `npm ci` + `npm run web:build`，再部署 `dist-web/`
-  - 可配置仓库变量：`CLOUDFLARE_PAGES_PROJECT_NAME`
+  - 仅负责 Cloudflare Pages
+  - 执行 `npm ci`、`npm run web:build` 后发布 `dist-web/`
+  - `main` 作为生产部署
+  - `cursor/**` 分支作为 preview 部署
 - `.github/workflows/deploy-workers.yml`
-  - 仅负责 Cloudflare Workers 发布
-  - 负责 `npm ci` + `npm run web:build`，再执行 `wrangler deploy`
-  - 默认读取仓库根目录 `wrangler.toml`
-  - 可配置仓库变量：`CLOUDFLARE_WORKERS_WORKING_DIRECTORY`
+  - 仅负责 Cloudflare Workers
+  - 执行 `npm ci`、`npm run web:build` 后运行 `wrangler deploy`
+  - `main` 使用 `wrangler.toml` 中的默认 Worker 名称
+  - `cursor/**` 分支自动派生隔离的 Worker 名称，避免覆盖生产 Worker
 
-两个 workflow 共用以下 GitHub Secrets：
+共用 GitHub Secrets：
 
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_API_TOKEN`
 
+可选 GitHub Variables：
+
+- `CLOUDFLARE_PAGES_PROJECT_NAME`
+- `CLOUDFLARE_WORKERS_WORKING_DIRECTORY`
+- `CLOUDFLARE_WORKERS_DEPLOY_COMMAND`
+- `CLOUDFLARE_WORKERS_BASE_NAME`
+
 说明：
 
-- 当前仓库已经包含 `package.json`、`web/`、`worker/`、`wrangler.toml`，两份 workflow 会直接构建并部署
-- 若需要修改 Pages 项目名，设置 `CLOUDFLARE_PAGES_PROJECT_NAME`
-- 若 Worker 工程未来迁移到子目录，可设置 `CLOUDFLARE_WORKERS_WORKING_DIRECTORY`
+- 当前仓库已经包含 `package.json`、`web/`、`worker/`、`wrangler.toml`，两份 workflow 可直接构建并部署
+- 如果没有配置 `CLOUDFLARE_PAGES_PROJECT_NAME`，Pages 默认项目名为 `h5-pos-print`
+- 如 Worker 工程未来迁移到子目录，可通过 `CLOUDFLARE_WORKERS_WORKING_DIRECTORY` 调整工作目录
+- 如需修改 preview Worker 的名称前缀，可设置 `CLOUDFLARE_WORKERS_BASE_NAME`
 
 ## 文档索引
 
