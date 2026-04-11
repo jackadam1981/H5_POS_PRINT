@@ -47,12 +47,28 @@ npm run web:dev
 
 > 说明：具体权限名称会随 Cloudflare 控制台变化。原则是“只给部署所需的最小权限”。
 
-### 2.2 需要在 GitHub Actions / Secrets 配置的变量
+### 2.2 需要在 GitHub 配置的 Secrets（Repository 还是 Environment？）
 
-在仓库的 GitHub Secrets 中添加：
+当前工作流 `.github/workflows/deploy-cloudflare.yml` 使用的是：
+
+```yaml
+secrets.CLOUDFLARE_API_TOKEN
+secrets.CLOUDFLARE_ACCOUNT_ID
+```
+
+在 GitHub 里，同名 Secrets 可以放在两类位置（**二选一即可**，不要两边各放一套不同值以免混淆）：
+
+| 类型 | 路径（UI） | 适用场景 |
+|------|------------|----------|
+| **Repository secrets** | 仓库 → **Settings** → **Secrets and variables** → **Actions** → **Repository secrets** | 最简单：本仓库所有工作流默认可用（当前 workflow 未声明 `environment:`，**推荐放这里**） |
+| **Environment secrets** | 仓库 → **Settings** → **Environments** → 选中某环境（如 `production`）→ **Environment secrets** | 需要按环境隔离（prod/staging）、审批、保护分支时再使用；若用这类，需在 workflow 的 `job` 上增加 `environment: <name>`，并把 `secrets.*` 改为该环境下的值 |
+
+**推荐（与现有一致）**：把下面两个变量配成 **Repository secrets**：
 
 - **`CLOUDFLARE_ACCOUNT_ID`**
 - **`CLOUDFLARE_API_TOKEN`**
+
+若你改为使用 **Environment secrets**，请同时修改 workflow：在 `deploy` job 下增加 `environment: 你的环境名`，否则 job 读不到 Environment 里的 secrets。
 
 并在工作流中使用 worker 名称：
 
@@ -64,7 +80,7 @@ npm run web:dev
 ### 2.3 仓库内已落盘的部署文件
 
 - `wrangler.toml`：Workers 项目配置（静态资源目录 `dist-web`）
-- `worker/worker.ts`：最小 Worker，转发静态资源（并为 Web Bluetooth 测试页添加必要的安全响应头）
+- `worker/index.ts`：最小 Worker，转发静态资源（并为 Web Bluetooth 测试页添加必要的安全响应头）
 - `.github/workflows/deploy-cloudflare.yml`：GitHub Actions 自动部署
 
 部署触发：
@@ -74,16 +90,13 @@ npm run web:dev
   - `main` → `h5-pos-print`
   - 其他分支 → `h5-pos-print-<sanitized-branch>`
 
-### 2.4 Actions 工作流需要的环境变量/密钥
+### 2.4 Actions 工作流读取的密钥（与 2.2 对应）
 
-在 GitHub 仓库的 Secrets 配置：
+工作流从 **`secrets.CLOUDFLARE_*`** 读取，因此上述两个变量需为 **Repository secrets**（或你已配置 `environment:` 时的 **Environment secrets**）。
 
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN`
+可选（若你后续改 workflow 支持手动覆盖名称）：
 
-可选（如果你希望手动覆盖 worker 名称，而不是按分支规则）：
-
-- `CLOUDFLARE_WORKER_NAME`
+- `CLOUDFLARE_WORKER_NAME`（当前 workflow 按分支自动算 worker 名，**未使用**此变量）
 
 ## 3. 访问地址与 HTTPS 要求
 
