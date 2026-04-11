@@ -22,19 +22,50 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Validate required secrets
+        id: auth
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing_secrets=()
+
+          if [[ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]]; then
+            missing_secrets+=("CLOUDFLARE_API_TOKEN")
+          fi
+
+          if [[ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]]; then
+            missing_secrets+=("CLOUDFLARE_ACCOUNT_ID")
+          fi
+
+          if (( ${#missing_secrets[@]} > 0 )); then
+            missing_csv="$(printf '%s, ' "${missing_secrets[@]}")"
+            missing_csv="${missing_csv%, }"
+            echo "Missing required GitHub Actions secrets: $missing_csv"
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "missing_secrets=$missing_csv" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+
       - name: Setup Node
+        if: steps.auth.outputs.should_deploy == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
 
       - name: Install dependencies
+        if: steps.auth.outputs.should_deploy == 'true'
         run: npm ci
 
       - name: Build web assets
+        if: steps.auth.outputs.should_deploy == 'true'
         run: npm run web:build
 
       - name: Resolve Pages deploy target
+        if: steps.auth.outputs.should_deploy == 'true'
         id: resolve
         shell: bash
         run: |
@@ -54,6 +85,7 @@ jobs:
             echo "No Pages deploy directory found."
             echo "Set CLOUDFLARE_PAGES_DEPLOY_DIR or add one of: dist-web/, site/, public/."
             echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=no Pages deploy directory found" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -62,22 +94,75 @@ jobs:
             project_name="h5-pos-print"
           fi
 
+          branch_name="${GITHUB_REF_NAME}"
+          if [[ "$branch_name" == "main" ]]; then
+            deploy_branch="main"
+          else
+            deploy_branch="$(echo "$branch_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g' | sed -E 's/^-+|-+$//g')"
+            deploy_branch="${deploy_branch:0:40}"
+            if [[ -z "$deploy_branch" ]]; then
+              deploy_branch="preview"
+            fi
+          fi
+
           echo "should_deploy=true" >> "$GITHUB_OUTPUT"
           echo "deploy_dir=$deploy_dir" >> "$GITHUB_OUTPUT"
           echo "project_name=$project_name" >> "$GITHUB_OUTPUT"
+          echo "deploy_branch=$deploy_branch" >> "$GITHUB_OUTPUT"
+
+      - name: Skip Pages deployment due to missing secrets
+        if: steps.auth.outputs.should_deploy != 'true'
+        run: |
+          echo "::warning::Skipping Pages deployment because required Cloudflare secrets are not configured: ${{ steps.auth.outputs.missing_secrets }}"
+          {
+            echo "## Deploy Pages"
+            echo
+            echo "- status: skipped"
+            echo "- reason: missing Cloudflare secrets"
+            echo "- missing: \`${{ steps.auth.outputs.missing_secrets }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Skip Pages deployment
-        if: steps.resolve.outputs.should_deploy != 'true'
-        run: echo "Skipping Pages deployment because no deploy directory is configured yet."
+        if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy != 'true'
+        run: |
+          echo "::notice::Skipping Pages deployment: ${{ steps.resolve.outputs.skip_reason }}"
+          {
+            echo "## Deploy Pages"
+            echo
+            echo "- status: skipped"
+            echo "- reason: ${{ steps.resolve.outputs.skip_reason }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Print Pages deploy plan
+        if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy == 'true'
+        run: |
+          echo "Cloudflare Pages project: ${{ steps.resolve.outputs.project_name }}"
+          echo "Deploy directory: ${{ steps.resolve.outputs.deploy_dir }}"
+          echo "Deploy branch: ${{ steps.resolve.outputs.deploy_branch }}"
+          {
+            echo "## Deploy Pages"
+            echo
+            echo "- status: ready"
+            echo "- project: \`${{ steps.resolve.outputs.project_name }}\`"
+            echo "- directory: \`${{ steps.resolve.outputs.deploy_dir }}\`"
+            echo "- branch: \`${{ steps.resolve.outputs.deploy_branch }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Deploy Pages
-        if: steps.resolve.outputs.should_deploy == 'true'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          command: >-
-            pages deploy ${{ steps.resolve.outputs.deploy_dir }}
-            --project-name=${{ steps.resolve.outputs.project_name }}
-            --branch=${{ github.ref_name }}
+        if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >-
+          npx wrangler pages deploy ${{ steps.resolve.outputs.deploy_dir }}
+          --project-name=${{ steps.resolve.outputs.project_name }}
+          --branch=${{ steps.resolve.outputs.deploy_branch }}
+
+      - name: Record Pages deployment success
+        if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy == 'true'
+        run: |
+          echo "::notice::Pages deployment command completed for project ${{ steps.resolve.outputs.project_name }} on branch ${{ steps.resolve.outputs.deploy_branch }}"
+          {
+            echo
+            echo "- status: completed"
+          } >> "$GITHUB_STEP_SUMMARY"

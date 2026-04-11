@@ -21,19 +21,50 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Validate required secrets
+        id: auth
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing_secrets=()
+
+          if [[ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]]; then
+            missing_secrets+=("CLOUDFLARE_API_TOKEN")
+          fi
+
+          if [[ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]]; then
+            missing_secrets+=("CLOUDFLARE_ACCOUNT_ID")
+          fi
+
+          if (( ${#missing_secrets[@]} > 0 )); then
+            missing_csv="$(printf '%s, ' "${missing_secrets[@]}")"
+            missing_csv="${missing_csv%, }"
+            echo "Missing required GitHub Actions secrets: $missing_csv"
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "missing_secrets=$missing_csv" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+
       - name: Setup Node
+        if: steps.auth.outputs.should_deploy == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
 
       - name: Install dependencies
+        if: steps.auth.outputs.should_deploy == 'true'
         run: npm ci
 
       - name: Build web assets
+        if: steps.auth.outputs.should_deploy == 'true'
         run: npm run web:build
 
       - name: Resolve Worker deploy command
+        if: steps.auth.outputs.should_deploy == 'true'
         id: resolve
         shell: bash
         run: |
@@ -45,6 +76,8 @@ jobs:
           fi
 
           deploy_command="${{ vars.CLOUDFLARE_WORKERS_DEPLOY_COMMAND }}"
+          worker_name=""
+          ref_name="${GITHUB_REF_NAME}"
           if [[ -z "$deploy_command" ]]; then
             config_file=""
             for candidate in wrangler.toml wrangler.jsonc wrangler.json; do
@@ -58,25 +91,94 @@ jobs:
               echo "No Wrangler config found."
               echo "Add wrangler.toml / wrangler.jsonc / wrangler.json, or set CLOUDFLARE_WORKERS_DEPLOY_COMMAND."
               echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+              echo "skip_reason=no Wrangler config or deploy command found" >> "$GITHUB_OUTPUT"
               exit 0
             fi
 
-            deploy_command="deploy --config $config_file"
+            if [[ "$ref_name" == "main" ]]; then
+              deploy_command="deploy --config $config_file"
+            else
+              safe_ref="$(echo "$ref_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g' | sed -E 's/^-+|-+$//g')"
+              safe_ref="${safe_ref:0:40}"
+              if [[ -z "$safe_ref" ]]; then
+                safe_ref="preview"
+              fi
+
+              base_name="${{ vars.CLOUDFLARE_WORKERS_BASE_NAME }}"
+              if [[ -z "$base_name" ]]; then
+                base_name="h5-pos-print"
+              fi
+
+              worker_name="$base_name-$safe_ref"
+              deploy_command="deploy --config $config_file --name $worker_name"
+            fi
           fi
 
           echo "should_deploy=true" >> "$GITHUB_OUTPUT"
           echo "working_directory=$working_directory" >> "$GITHUB_OUTPUT"
           echo "deploy_command=$deploy_command" >> "$GITHUB_OUTPUT"
+          echo "worker_name=$worker_name" >> "$GITHUB_OUTPUT"
+
+      - name: Skip Worker deployment due to missing secrets
+        if: steps.auth.outputs.should_deploy != 'true'
+        run: |
+          echo "::warning::Skipping Worker deployment because required Cloudflare secrets are not configured: ${{ steps.auth.outputs.missing_secrets }}"
+          {
+            echo "## Deploy Worker"
+            echo
+            echo "- status: skipped"
+            echo "- reason: missing Cloudflare secrets"
+            echo "- missing: \`${{ steps.auth.outputs.missing_secrets }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Skip Worker deployment
-        if: steps.resolve.outputs.should_deploy != 'true'
-        run: echo "Skipping Worker deployment because no Wrangler config or deploy command is configured yet."
+        if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy != 'true'
+        run: |
+          echo "::notice::Skipping Worker deployment: ${{ steps.resolve.outputs.skip_reason }}"
+          {
+            echo "## Deploy Worker"
+            echo
+            echo "- status: skipped"
+            echo "- reason: ${{ steps.resolve.outputs.skip_reason }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Show Worker target
+        if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy == 'true'
+        run: |
+          if [[ -n "${{ steps.resolve.outputs.worker_name }}" ]]; then
+            echo "Deploying preview Worker: ${{ steps.resolve.outputs.worker_name }}"
+          else
+            echo "Deploying production Worker from Wrangler config."
+          fi
+          {
+            echo "## Deploy Worker"
+            echo
+            echo "- status: ready"
+            echo "- working directory: \`${{ steps.resolve.outputs.working_directory }}\`"
+            echo "- command: \`npx wrangler ${{ steps.resolve.outputs.deploy_command }}\`"
+            if [[ -n "${{ steps.resolve.outputs.worker_name }}" ]]; then
+              echo "- target: \`${{ steps.resolve.outputs.worker_name }}\`"
+            else
+              echo "- target: production Worker from \`wrangler.toml\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Deploy Worker
-        if: steps.resolve.outputs.should_deploy == 'true'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: ${{ steps.resolve.outputs.working_directory }}
-          command: ${{ steps.resolve.outputs.deploy_command }}
+        if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy == 'true'
+        shell: bash
+        working-directory: ${{ steps.resolve.outputs.working_directory }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler ${{ steps.resolve.outputs.deploy_command }}
+
+      - name: Record Worker deployment success
+        if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy == 'true'
+        run: |
+          echo "::notice::Worker deployment command completed."
+          {
+            echo
+            echo "- status: completed"
+          } >> "$GITHUB_STEP_SUMMARY"
