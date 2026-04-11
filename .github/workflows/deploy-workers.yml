@@ -21,19 +21,43 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Validate required secrets
+        id: auth
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]]; then
+            echo "Missing required GitHub Actions secret: CLOUDFLARE_API_TOKEN"
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]]; then
+            echo "Missing required GitHub Actions secret: CLOUDFLARE_ACCOUNT_ID"
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+
       - name: Setup Node
+        if: steps.auth.outputs.should_deploy == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
 
       - name: Install dependencies
+        if: steps.auth.outputs.should_deploy == 'true'
         run: npm ci
 
       - name: Build web assets
+        if: steps.auth.outputs.should_deploy == 'true'
         run: npm run web:build
 
       - name: Resolve Worker deploy command
+        if: steps.auth.outputs.should_deploy == 'true'
         id: resolve
         shell: bash
         run: |
@@ -87,12 +111,16 @@ jobs:
           echo "deploy_command=$deploy_command" >> "$GITHUB_OUTPUT"
           echo "worker_name=$worker_name" >> "$GITHUB_OUTPUT"
 
+      - name: Skip Worker deployment due to missing secrets
+        if: steps.auth.outputs.should_deploy != 'true'
+        run: echo "Skipping Worker deployment because required Cloudflare secrets are not configured."
+
       - name: Skip Worker deployment
-        if: steps.resolve.outputs.should_deploy != 'true'
+        if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy != 'true'
         run: echo "Skipping Worker deployment because no Wrangler config or deploy command is configured yet."
 
       - name: Show Worker target
-        if: steps.resolve.outputs.should_deploy == 'true'
+        if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy == 'true'
         run: |
           if [[ -n "${{ steps.resolve.outputs.worker_name }}" ]]; then
             echo "Deploying preview Worker: ${{ steps.resolve.outputs.worker_name }}"
@@ -101,7 +129,7 @@ jobs:
           fi
 
       - name: Deploy Worker
-        if: steps.resolve.outputs.should_deploy == 'true'
+        if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy == 'true'
         shell: bash
         working-directory: ${{ steps.resolve.outputs.working_directory }}
         env:

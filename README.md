@@ -67,6 +67,7 @@ npm run web:build
 - `main`：生产部署
 - `cursor/**`：预览部署
 - 预览环境会把 Git 分支名归一化为 Cloudflare 可接受的 branch / Worker 名称
+- 如果缺少 `CLOUDFLARE_API_TOKEN` 或 `CLOUDFLARE_ACCOUNT_ID`，workflow 会跳过 deploy 并在日志中提示缺失项
 
 完整配置步骤见：[`docs/cloudflare-deployment-checklist.md`](docs/cloudflare-deployment-checklist.md)
 

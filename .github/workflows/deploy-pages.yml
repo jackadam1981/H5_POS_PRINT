@@ -40,6 +40,21 @@ jobs:
         run: |
           set -euo pipefail
 
+          has_api_token="${{ secrets.CLOUDFLARE_API_TOKEN != '' }}"
+          has_account_id="${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}"
+          if [[ "$has_api_token" != "true" || "$has_account_id" != "true" ]]; then
+            echo "Cloudflare secrets are not fully configured."
+            if [[ "$has_api_token" != "true" ]]; then
+              echo "Missing secret: CLOUDFLARE_API_TOKEN"
+            fi
+            if [[ "$has_account_id" != "true" ]]; then
+              echo "Missing secret: CLOUDFLARE_ACCOUNT_ID"
+            fi
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=missing Cloudflare secrets" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           deploy_dir="${{ vars.CLOUDFLARE_PAGES_DEPLOY_DIR }}"
           if [[ -z "$deploy_dir" ]]; then
             for candidate in dist-web site public; do
@@ -54,6 +69,7 @@ jobs:
             echo "No Pages deploy directory found."
             echo "Set CLOUDFLARE_PAGES_DEPLOY_DIR or add one of: dist-web/, site/, public/."
             echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=no Pages deploy directory found" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -80,7 +96,7 @@ jobs:
 
       - name: Skip Pages deployment
         if: steps.resolve.outputs.should_deploy != 'true'
-        run: echo "Skipping Pages deployment because no deploy directory is configured yet."
+        run: echo "Skipping Pages deployment: ${{ steps.resolve.outputs.skip_reason }}"
 
       - name: Print Pages deploy plan
         if: steps.resolve.outputs.should_deploy == 'true'
