@@ -66,7 +66,11 @@ jobs:
           if [[ "$branch_name" == "main" ]]; then
             deploy_branch="main"
           else
-            deploy_branch="$branch_name"
+            deploy_branch="$(echo "$branch_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g' | sed -E 's/^-+|-+$//g')"
+            deploy_branch="${deploy_branch:0:40}"
+            if [[ -z "$deploy_branch" ]]; then
+              deploy_branch="preview"
+            fi
           fi
 
           echo "should_deploy=true" >> "$GITHUB_OUTPUT"
@@ -87,12 +91,10 @@ jobs:
 
       - name: Deploy Pages
         if: steps.resolve.outputs.should_deploy == 'true'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          command: >-
-            pages deploy ${{ steps.resolve.outputs.deploy_dir }}
-            --project-name=${{ steps.resolve.outputs.project_name }}
-            --branch=${{ steps.resolve.outputs.deploy_branch }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >-
+          npx wrangler pages deploy ${{ steps.resolve.outputs.deploy_dir }}
+          --project-name=${{ steps.resolve.outputs.project_name }}
+          --branch=${{ steps.resolve.outputs.deploy_branch }}
