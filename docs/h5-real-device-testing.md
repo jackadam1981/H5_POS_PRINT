@@ -81,22 +81,42 @@ secrets.CLOUDFLARE_ACCOUNT_ID
 
 - `wrangler.toml`：Workers 项目配置（静态资源目录 `dist-web`）
 - `worker/index.ts`：最小 Worker，转发静态资源（并为 Web Bluetooth 测试页添加必要的安全响应头）
-- `.github/workflows/deploy-cloudflare.yml`：GitHub Actions 自动部署
+- `.github/workflows/deploy-cloudflare.yml`：GitHub Actions **同时**部署 **Workers** 与 **Pages**
 
-部署触发：
+一次 `push` 后的流程简述：
+
+1. **build**：`npm ci` + `npm run web:build`，产出 `dist-web/`，上传为 artifact  
+2. **deploy-workers** 与 **deploy-pages**：**并行**执行，共用同一份 `dist-web`
+
+Workers：
 
 - **所有分支 push 都会部署**
-- worker 名称策略：
+- Worker 名称：
   - `main` → `h5-pos-print`
   - 其他分支 → `h5-pos-print-<sanitized-branch>`
 
+Pages：
+
+- **需在 Cloudflare 控制台先创建同名 Pages 项目**（默认项目名 `h5-pos-print`，与 Worker 基名一致）
+- `main`：`wrangler pages deploy dist-web --project-name=<项目名>`（**生产**部署）
+- 其他分支：同上并带 `--branch=<分支名>`（**预览**部署，URL 在 Cloudflare Pages 控制台查看）
+
 ### 2.4 Actions 工作流读取的密钥（与 2.2 对应）
 
-工作流从 **`secrets.CLOUDFLARE_*`** 读取，因此上述两个变量需为 **Repository secrets**（或你已配置 `environment:` 时的 **Environment secrets**）。
+工作流从 **`secrets.CLOUDFLARE_*`** 读取，因此下列变量需为 **Repository secrets**（或你已配置 `environment:` 时的 **Environment secrets**）。
 
-可选（若你后续改 workflow 支持手动覆盖名称）：
+**必填：**
 
-- `CLOUDFLARE_WORKER_NAME`（当前 workflow 按分支自动算 worker 名，**未使用**此变量）
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN`（需同时具备 **Workers 部署** 与 **Pages 部署** 所需权限；具体以 Cloudflare 控制台当前权限名为准）
+
+**可选：**
+
+- `CLOUDFLARE_PAGES_PROJECT_NAME`：Pages 项目名称；**未设置时默认 `h5-pos-print`**（须与你在 Cloudflare 里创建的 Pages 项目名一致）
+
+未使用：
+
+- `CLOUDFLARE_WORKER_NAME`（Worker 名仍由分支规则自动计算）
 
 ## 3. 访问地址与 HTTPS 要求
 
