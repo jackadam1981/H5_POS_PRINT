@@ -7,6 +7,29 @@
 - CPCL 原生指令与位图混合渲染
 - BLE 连接、分包发送与错误处理
 
+## GitHub Actions 部署
+
+仓库已拆分为两个独立 workflow：
+
+- `.github/workflows/deploy-pages.yml`
+  - 仅负责 Cloudflare Pages 发布
+  - 默认查找 `dist-web/`、`site/`、`public/` 目录
+  - 可配置仓库变量：`CLOUDFLARE_PAGES_PROJECT_NAME`、`CLOUDFLARE_PAGES_DEPLOY_DIR`
+- `.github/workflows/deploy-workers.yml`
+  - 仅负责 Cloudflare Workers 发布
+  - 默认查找 `wrangler.toml` 或 `wrangler.jsonc`
+  - 可配置仓库变量：`CLOUDFLARE_WORKERS_WORKING_DIRECTORY`、`CLOUDFLARE_WORKERS_DEPLOY_COMMAND`
+
+两个 workflow 共用以下 GitHub Secrets：
+
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN`
+
+说明：
+
+- 当前仓库还没有实际的 Pages 构建产物或 Workers 配置文件，所以这两个 workflow 会在缺少目标文件时自动跳过，而不是直接失败
+- 后续接入正式项目时，只需要补上 `dist-web/` 和 `wrangler` 配置即可启用实际部署
+
 ## 文档索引
 
 ### 方案规格
