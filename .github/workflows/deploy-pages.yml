@@ -28,15 +28,22 @@ jobs:
         run: |
           set -euo pipefail
 
+          missing_secrets=()
+
           if [[ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]]; then
-            echo "Missing required GitHub Actions secret: CLOUDFLARE_API_TOKEN"
-            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            missing_secrets+=("CLOUDFLARE_API_TOKEN")
           fi
 
           if [[ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]]; then
-            echo "Missing required GitHub Actions secret: CLOUDFLARE_ACCOUNT_ID"
+            missing_secrets+=("CLOUDFLARE_ACCOUNT_ID")
+          fi
+
+          if (( ${#missing_secrets[@]} > 0 )); then
+            missing_csv="$(printf '%s, ' "${missing_secrets[@]}")"
+            missing_csv="${missing_csv%, }"
+            echo "Missing required GitHub Actions secrets: $missing_csv"
             echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "missing_secrets=$missing_csv" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -105,12 +112,26 @@ jobs:
 
       - name: Skip Pages deployment due to missing secrets
         if: steps.auth.outputs.should_deploy != 'true'
-        run: echo "Skipping Pages deployment because required Cloudflare secrets are not configured."
+        run: |
+          echo "::warning::Skipping Pages deployment because required Cloudflare secrets are not configured: ${{ steps.auth.outputs.missing_secrets }}"
+          {
+            echo "## Deploy Pages"
+            echo
+            echo "- status: skipped"
+            echo "- reason: missing Cloudflare secrets"
+            echo "- missing: \`${{ steps.auth.outputs.missing_secrets }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Skip Pages deployment
         if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy != 'true'
         run: |
-          echo "Skipping Pages deployment: ${{ steps.resolve.outputs.skip_reason }}"
+          echo "::notice::Skipping Pages deployment: ${{ steps.resolve.outputs.skip_reason }}"
+          {
+            echo "## Deploy Pages"
+            echo
+            echo "- status: skipped"
+            echo "- reason: ${{ steps.resolve.outputs.skip_reason }}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Print Pages deploy plan
         if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy == 'true'
@@ -118,6 +139,14 @@ jobs:
           echo "Cloudflare Pages project: ${{ steps.resolve.outputs.project_name }}"
           echo "Deploy directory: ${{ steps.resolve.outputs.deploy_dir }}"
           echo "Deploy branch: ${{ steps.resolve.outputs.deploy_branch }}"
+          {
+            echo "## Deploy Pages"
+            echo
+            echo "- status: ready"
+            echo "- project: \`${{ steps.resolve.outputs.project_name }}\`"
+            echo "- directory: \`${{ steps.resolve.outputs.deploy_dir }}\`"
+            echo "- branch: \`${{ steps.resolve.outputs.deploy_branch }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Deploy Pages
         if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy == 'true'
@@ -128,3 +157,12 @@ jobs:
           npx wrangler pages deploy ${{ steps.resolve.outputs.deploy_dir }}
           --project-name=${{ steps.resolve.outputs.project_name }}
           --branch=${{ steps.resolve.outputs.deploy_branch }}
+
+      - name: Record Pages deployment success
+        if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy == 'true'
+        run: |
+          echo "::notice::Pages deployment command completed for project ${{ steps.resolve.outputs.project_name }} on branch ${{ steps.resolve.outputs.deploy_branch }}"
+          {
+            echo
+            echo "- status: completed"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -70,6 +70,7 @@ npm run web:build
 - 如果缺少 `CLOUDFLARE_API_TOKEN` 或 `CLOUDFLARE_ACCOUNT_ID`，workflow 会跳过 deploy 并在日志中提示缺失项
 
 完整配置步骤见：[`docs/cloudflare-deployment-checklist.md`](docs/cloudflare-deployment-checklist.md)
+可直接复制填写的配置模板见：[`docs/cloudflare-config-template.md`](docs/cloudflare-config-template.md)
 
 ## 文档导航
 
@@ -77,6 +78,8 @@ npm run web:build
 
 - [`docs/cloudflare-deployment-checklist.md`](docs/cloudflare-deployment-checklist.md)
   - Cloudflare / GitHub Actions 落地清单
+- [`docs/cloudflare-config-template.md`](docs/cloudflare-config-template.md)
+  - Cloudflare / GitHub Secrets / Variables 可直接填写的模板
 - [`docs/h5-real-device-testing.md`](docs/h5-real-device-testing.md)
   - Android 真机 Web Bluetooth 联调说明
 

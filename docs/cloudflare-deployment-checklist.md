@@ -2,6 +2,8 @@
 
 本文是仓库当前 GitHub Actions 与 Cloudflare 部署配置的落地说明，目标是让你按步骤完成一次可工作的配置，而不是只知道“理论上需要哪些东西”。
 
+如果你只是想快速照着填值，先看：[`docs/cloudflare-config-template.md`](./cloudflare-config-template.md)
+
 适用范围：
 
 - Cloudflare Workers
@@ -184,6 +186,21 @@ directory = "./dist-web"
 - 可只配置：
   - `CLOUDFLARE_PAGES_PROJECT_NAME=h5-pos-print`
 - 其余保持默认
+
+### 4.3 直接复制模板
+
+如果你已经确认沿用仓库默认命名，建议直接参考：
+
+- [`docs/cloudflare-config-template.md`](./cloudflare-config-template.md)
+
+它把：
+
+- Cloudflare 侧固定值
+- GitHub Repository secrets
+- GitHub Repository variables
+- 最小配置与完整推荐配置
+
+都整理成了可直接复制填写的形式。
 
 ## 5. 首次落地推荐顺序
 
