@@ -4,6 +4,18 @@
 
 > 结论：**Android Chrome + HTTPS** 可测；**iPhone Safari 不支持 Web Bluetooth**，iOS 端请走小程序/APP。
 
+## 0. 终端形态（不在用户手机装 Node）
+
+本项目的**用户侧**不依赖在手机上安装 Node.js，也不把 Node 当作手机上的打印宿主。
+
+- **构建与部署**：Node 只出现在 **开发者机器** 与 **CI（GitHub Actions）** 里，用于 `npm run web:build`、打包静态资源并部署到 Cloudflare。
+- **用户侧执行环境**：
+  - **iOS**：微信小程序（BLE 直连打印机），用户只需微信，无需装 Node/App（若你后续选择纯小程序方案）。
+  - **Android**：微信内同样可走小程序；微信外可用 **HTTPS 的 H5**（Chrome Web Bluetooth），用户只需浏览器，无需装 Node。
+- **打印逻辑**：业务与协议（CPCL / ESC-POS 子集）以 **TypeScript 核心库**形式存在，编译进 H5/小程序 bundle；**不是**让用户手机跑 `node` 进程。
+
+因此：“手机端执行、不需要安装 Node”对应的是 **浏览器或小程序运行时**，而不是 Termux/手机本地 Node。
+
 ## 1. 你将测试什么
 
 仓库内的 H5 测试台位于 `web/`，提供：
