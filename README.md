@@ -1,83 +1,86 @@
 # H5_POS_PRINT
 
-蓝牙标签打印仓库，当前同时包含文档、TypeScript 打印核心、H5 Web Bluetooth 测试台，以及 Cloudflare 部署配置，重点覆盖：
+一个面向蓝牙标签打印的仓库，当前包含：
 
-- 模板与机型解耦
-- 按机型宽度自动缩放
-- CPCL 原生指令与位图混合渲染
-- BLE 连接、分包发送与错误处理
+- `src/`：TypeScript 打印核心与协议映射
+- `web/`：H5 Web Bluetooth 测试台
+- `worker/`：Cloudflare Worker 入口
+- `docs/`：方案、实现、部署与联调文档
 
-## GitHub Actions 部署
+## 快速开始
 
-完整配置步骤与上线检查项见：[`docs/cloudflare-deployment-checklist.md`](docs/cloudflare-deployment-checklist.md)
+### 1. 安装依赖
 
-仓库使用两个独立 workflow：
+```bash
+npm ci
+```
+
+### 2. 本地启动 H5 测试台
+
+```bash
+npm run web:dev
+```
+
+默认启动后可在浏览器打开本地开发地址，用于调试 Web Bluetooth 页面。
+
+### 3. 类型检查
+
+```bash
+npm run typecheck
+```
+
+### 4. 构建产物
+
+```bash
+npm run web:build
+```
+
+构建结果输出到 `dist-web/`，会被 Pages 和 Worker 部署流程复用。
+
+## 常用命令
+
+```bash
+npm ci
+npm run web:dev
+npm run typecheck
+npm run web:build
+```
+
+## Cloudflare 最小部署
+
+仓库已经内置两个 GitHub Actions workflow：
 
 - `.github/workflows/deploy-pages.yml`
-  - 仅负责 Cloudflare Pages
-  - 执行 `npm ci`、`npm run web:build` 后发布 `dist-web/`
-  - `main` 作为生产部署
-  - `cursor/**` 分支作为 preview 部署
 - `.github/workflows/deploy-workers.yml`
-  - 仅负责 Cloudflare Workers
-  - 执行 `npm ci`、`npm run web:build` 后运行 `wrangler deploy`
-  - `main` 使用 `wrangler.toml` 中的默认 Worker 名称
-  - `cursor/**` 分支自动派生隔离的 Worker 名称，避免覆盖生产 Worker
 
-共用 GitHub Secrets：
+最少只需要配置这两个 GitHub Secrets：
 
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_API_TOKEN`
 
-可选 GitHub Variables：
+建议再配置这个 GitHub Variable：
 
-- `CLOUDFLARE_PAGES_PROJECT_NAME`
-- `CLOUDFLARE_WORKERS_WORKING_DIRECTORY`
-- `CLOUDFLARE_WORKERS_DEPLOY_COMMAND`
-- `CLOUDFLARE_WORKERS_BASE_NAME`
+- `CLOUDFLARE_PAGES_PROJECT_NAME=h5-pos-print`
 
-说明：
+当前默认部署行为：
 
-- 当前仓库已经包含 `package.json`、`web/`、`worker/`、`wrangler.toml`，两份 workflow 可直接构建并部署
-- 如果没有配置 `CLOUDFLARE_PAGES_PROJECT_NAME`，Pages 默认项目名为 `h5-pos-print`
-- 如 Worker 工程未来迁移到子目录，可通过 `CLOUDFLARE_WORKERS_WORKING_DIRECTORY` 调整工作目录
-- 如需修改 preview Worker 的名称前缀，可设置 `CLOUDFLARE_WORKERS_BASE_NAME`
+- `main`：生产部署
+- `cursor/**`：预览部署
 
-## 文档索引
+完整配置步骤见：[`docs/cloudflare-deployment-checklist.md`](docs/cloudflare-deployment-checklist.md)
+
+## 文档导航
 
 ### 部署与联调
 
 - [`docs/cloudflare-deployment-checklist.md`](docs/cloudflare-deployment-checklist.md)
-  - Cloudflare / GitHub Actions 的落地配置清单
-  - 适合第一次把 Pages + Workers 自动部署真正跑通
+  - Cloudflare / GitHub Actions 落地清单
 - [`docs/h5-real-device-testing.md`](docs/h5-real-device-testing.md)
-  - Android 真机 Web Bluetooth 测试说明
-  - 适合部署完成后做公网 HTTPS 联调
+  - Android 真机 Web Bluetooth 联调说明
 
-### 方案规格
+### 方案与实现
 
 - [`docs/printing-spec.md`](docs/printing-spec.md)
-  - 定义产品边界、模板能力、机型配置要求与打印规则
-  - 适合作为需求评审、产品对齐和实现基线
-
-### 实现指南
-
+  - 打印方案规格
 - [`docs/printing-implementation-guide.md`](docs/printing-implementation-guide.md)
-  - 补充运行时数据结构、编译流程、IR、BLE 分包和错误码建议
-  - 适合作为前端、小程序端和驱动层的落地参考
-
-## 当前范围
-
-当前仓库已经包含可继续演进的实现骨架：
-
-- `src/`：打印核心与协议映射
-- `web/`：H5 Web Bluetooth 测试台
-- `worker/`：Cloudflare Worker 入口
-- `docs/`：方案规格、实现指南、真机测试说明
-
-建议后续优先推进：
-
-1. 固化 `printerProfile` 数据结构与机型清单
-2. 补充核心库测试与样例输入输出
-3. 完善真机兼容性验证与认证机型数据
-4. 按业务需要补齐小程序端接入
+  - 运行时数据结构、编译流程与驱动落地说明
