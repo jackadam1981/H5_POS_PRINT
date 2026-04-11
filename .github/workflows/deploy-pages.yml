@@ -109,7 +109,8 @@ jobs:
 
       - name: Skip Pages deployment
         if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy != 'true'
-        run: echo "Skipping Pages deployment: ${{ steps.resolve.outputs.skip_reason }}"
+        run: |
+          echo "Skipping Pages deployment: ${{ steps.resolve.outputs.skip_reason }}"
 
       - name: Print Pages deploy plan
         if: steps.auth.outputs.should_deploy == 'true' && steps.resolve.outputs.should_deploy == 'true'
