@@ -1,0 +1,82 @@
+name: Deploy Worker
+
+on:
+  push:
+    branches:
+      - main
+      - "cursor/**"
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-workers-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare Workers
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: npm run web:build
+
+      - name: Resolve Worker deploy command
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          working_directory="${{ vars.CLOUDFLARE_WORKERS_WORKING_DIRECTORY }}"
+          if [[ -z "$working_directory" ]]; then
+            working_directory="."
+          fi
+
+          deploy_command="${{ vars.CLOUDFLARE_WORKERS_DEPLOY_COMMAND }}"
+          if [[ -z "$deploy_command" ]]; then
+            config_file=""
+            for candidate in wrangler.toml wrangler.jsonc wrangler.json; do
+              if [[ -f "$working_directory/$candidate" ]]; then
+                config_file="$candidate"
+                break
+              fi
+            done
+
+            if [[ -z "$config_file" ]]; then
+              echo "No Wrangler config found."
+              echo "Add wrangler.toml / wrangler.jsonc / wrangler.json, or set CLOUDFLARE_WORKERS_DEPLOY_COMMAND."
+              echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            deploy_command="deploy --config $config_file"
+          fi
+
+          echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+          echo "working_directory=$working_directory" >> "$GITHUB_OUTPUT"
+          echo "deploy_command=$deploy_command" >> "$GITHUB_OUTPUT"
+
+      - name: Skip Worker deployment
+        if: steps.resolve.outputs.should_deploy != 'true'
+        run: echo "Skipping Worker deployment because no Wrangler config or deploy command is configured yet."
+
+      - name: Deploy Worker
+        if: steps.resolve.outputs.should_deploy == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: ${{ steps.resolve.outputs.working_directory }}
+          command: ${{ steps.resolve.outputs.deploy_command }}

@@ -1,0 +1,83 @@
+name: Deploy Pages
+
+on:
+  push:
+    branches:
+      - main
+      - "cursor/**"
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to Cloudflare Pages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: npm run web:build
+
+      - name: Resolve Pages deploy target
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          deploy_dir="${{ vars.CLOUDFLARE_PAGES_DEPLOY_DIR }}"
+          if [[ -z "$deploy_dir" ]]; then
+            for candidate in dist-web site public; do
+              if [[ -d "$candidate" ]]; then
+                deploy_dir="$candidate"
+                break
+              fi
+            done
+          fi
+
+          if [[ -z "$deploy_dir" ]]; then
+            echo "No Pages deploy directory found."
+            echo "Set CLOUDFLARE_PAGES_DEPLOY_DIR or add one of: dist-web/, site/, public/."
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          project_name="${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}"
+          if [[ -z "$project_name" ]]; then
+            project_name="h5-pos-print"
+          fi
+
+          echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+          echo "deploy_dir=$deploy_dir" >> "$GITHUB_OUTPUT"
+          echo "project_name=$project_name" >> "$GITHUB_OUTPUT"
+
+      - name: Skip Pages deployment
+        if: steps.resolve.outputs.should_deploy != 'true'
+        run: echo "Skipping Pages deployment because no deploy directory is configured yet."
+
+      - name: Deploy Pages
+        if: steps.resolve.outputs.should_deploy == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          command: >-
+            pages deploy ${{ steps.resolve.outputs.deploy_dir }}
+            --project-name=${{ steps.resolve.outputs.project_name }}
+            --branch=${{ github.ref_name }}

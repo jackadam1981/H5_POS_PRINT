@@ -1,0 +1,27 @@
+{
+  "name": "h5-pos-print",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CPCL label printing core (WeChat mini program + Android H5 Web Bluetooth)",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "demo": "node --enable-source-maps dist/demo.js",
+    "web:dev": "vite --config web/vite.config.ts",
+    "web:build": "vite build --config web/vite.config.ts",
+    "lint": "node -e \"console.log('no lint configured')\"",
+    "test": "node -e \"console.log('no tests configured')\""
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "@types/pngjs": "^6.0.5",
+    "typescript": "^5.9.2",
+    "vite": "^8.0.7",
+    "wrangler": "^4.81.0"
+  },
+  "dependencies": {
+    "pngjs": "^7.0.0"
+  }
+}

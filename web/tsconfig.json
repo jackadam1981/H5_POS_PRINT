@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "outDir": "./dist",
+    "declaration": false,
+    "types": [],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "noEmit": true
+  },
+  "exclude": ["../src/demo.ts"],
+  "include": ["vite.config.ts", "src/**/*.ts", "../src/**/*.ts"]
+}
+

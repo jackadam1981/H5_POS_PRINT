@@ -1,5 +1,7 @@
 # 蓝牙标签打印（CPCL）方案规格（定稿）
 
+> 配套实现说明见：[`docs/printing-implementation-guide.md`](./printing-implementation-guide.md)
+
 ## 目标与范围
 
 本规格用于实现「公众用户」场景下的标签打印能力，采用**双通道**：
@@ -62,9 +64,7 @@
 - 图片元素最大比例为 **9:16（宽:高，竖版）**
 - 对任意图片元素，按其当前宽度计算允许的最大高度：
 
-\[
-maxImageHeightMm = imageWidthMm \times \frac{16}{9}
-\]
+`maxImageHeightMm = imageWidthMm * (16 / 9)`
 
 当图片元素高度超过上限时：
 
@@ -83,11 +83,9 @@ maxImageHeightMm = imageWidthMm \times \frac{16}{9}
   - `supportsNativeQRCode`（建议 true）
   - `supportsNativeBarcode`（按业务）
   - `fontMap`（模板字体/字号到 CPCL 内置字库的映射规则）
-
 - **分辨率与标定**
   - `dpi` 或 `mmToDotScale`
   - 允许未知：通过“认证/校准流程”写入
-
 - **BLE 通道（小程序/Android H5 共用概念，不同实现）**
   - `ble.serviceUUID`
   - `ble.writeCharacteristicUUID`
@@ -173,4 +171,406 @@ maxImageHeightMm = imageWidthMm \times \frac{16}{9}
 - 连接失败：权限/蓝牙关闭/不支持 BLE/设备不可见
 - 写入失败：分包超时/断连/特征不可写
 - 数据过大：提示缩小图片或改用更小背景；必要时提示拆分打印
+
+## 数据结构（建议）与示例
+
+本节提供“能直接开工”的建议字段与示例。首版不强制完全一致，但建议尽量贴近，便于跨端复用（小程序 + Android H5）。
+
+### 模板（Template）字段约束（近似 Schema）
+
+> 目的：把“编辑器能存什么/打印端需要什么”说清楚，避免前后端/多端各自扩展导致不可兼容。
+
+- **通用**
+  - `unit`：固定 `"mm"`
+  - `canvas.widthMm`：`0 < widthMm <= 110`
+  - `canvas.heightMm`：`> 0`（建议产品层面设置可配置上限，如 300–500mm，并支持分页）
+  - `canvas.scalePolicy`：默认 `"fitWidth"`（定稿）
+  - `elements[]`：按 `zIndex`（或数组顺序）由低到高叠加
+- **元素通用字段**
+  - `id`：全局唯一字符串
+  - `type`：`"text" | "qrcode" | "barcode" | "image"`
+  - `xMm`, `yMm`：可为 0 或正数；建议限制在画布范围内（允许少量溢出以便裁切）
+  - `widthMm`, `heightMm`：`> 0`
+  - `rotationDeg`：`(-180, 180]` 或 `[0, 360)`（二者择一即可，内部统一归一化）
+- **Text**
+  - `text`：支持纯文本或 `{{field}}` 变量
+  - `textAlign`：`left | center | right`（对齐通过坐标计算实现，不依赖打印机命令）
+  - `font.family`：
+    - `"builtin"`：走机型内置字体映射（优先）
+    - `"custom"`：必须提供字体资源引用（走位图兜底）
+  - `font.sizeMm`：字号以 mm 表示（便于跨 DPI）
+  - `font.weight`：可选；仅影响位图渲染或映射到“粗体档位”时生效
+- **QRCode**
+  - `data`：支持 `{{field}}`
+  - `sizeMm`：正数；渲染时换算为 dot 并映射到 CPCL 的模块大小参数
+  - `ecc`：`L | M | Q | H`（首版可以只支持 L/M）
+- **Barcode**
+  - `symbology`：建议首版支持 `CODE128`（可扩展）
+  - `data`：支持 `{{field}}`
+  - `heightMm`：条码高度
+  - `humanReadable`：是否打印可读字符（可选）
+- **Image**
+  - `mode`：`logo | background | photo`（决定二值化/抖动/锐化策略）
+  - `src.kind`：`url | dataUri | r2Key`（建议至少 `url`/`dataUri`）
+  - **比例限制（定稿）**：`heightMm <= widthMm * 16/9`（9:16 宽高比）
+  - `opacity`：首版建议不支持（热敏打印最终是 1bpp）
+
+### 模板（Template）JSON（示例）
+
+约定：
+
+- 全部使用 mm（可小数），坐标系左上角 (0,0)
+- `rotationDeg` 允许任意角度（渲染时按规则选择“原生/位图兜底”）
+- 图片元素通过 `mode` 表示用途（logo/background/photo）以选择不同抖动/压缩策略
+
+```json
+{
+  "id": "tpl_demo_001",
+  "name": "CC4-示例模板",
+  "unit": "mm",
+  "canvas": {
+    "widthMm": 110,
+    "heightMm": 200,
+    "scalePolicy": "fitWidth"
+  },
+  "elements": [
+    {
+      "id": "img_bg",
+      "type": "image",
+      "xMm": 0,
+      "yMm": 0,
+      "widthMm": 104,
+      "heightMm": 185,
+      "rotationDeg": 0,
+      "mode": "background",
+      "src": {
+        "kind": "url",
+        "value": "https://example.com/assets/bg.png"
+      }
+    },
+    {
+      "id": "txt_title",
+      "type": "text",
+      "xMm": 6,
+      "yMm": 8,
+      "widthMm": 92,
+      "heightMm": 10,
+      "rotationDeg": 0,
+      "text": "{{name}}",
+      "textAlign": "left",
+      "font": {
+        "family": "builtin",
+        "sizeMm": 6,
+        "weight": 600
+      }
+    },
+    {
+      "id": "qr_1",
+      "type": "qrcode",
+      "xMm": 70,
+      "yMm": 120,
+      "sizeMm": 28,
+      "rotationDeg": 0,
+      "data": "{{qrcode}}",
+      "ecc": "M"
+    },
+    {
+      "id": "img_logo",
+      "type": "image",
+      "xMm": 6,
+      "yMm": 24,
+      "widthMm": 20,
+      "heightMm": 20,
+      "rotationDeg": 15,
+      "mode": "logo",
+      "src": {
+        "kind": "dataUri",
+        "value": "data:image/png;base64,...."
+      }
+    }
+  ],
+  "dataSchema": {
+    "name": { "type": "string", "required": true },
+    "qrcode": { "type": "string", "required": true }
+  }
+}
+```
+
+### 机型配置（Printer Profile）JSON（示例：CC4）
+
+说明：
+
+- `printableWidthMm`：机型“最大有效打印宽”
+- `dpi` 与 `mmToDotScale` 二选一即可（推荐最终落 `mmToDotScale`，更贴近实际标定）
+- `cpclDialect` 用于收口 CPCL 方言差异（不同厂商/型号可能命令参数略有区别）
+
+```json
+{
+  "id": "zicox_cc4",
+  "manufacturer": "ZICOX",
+  "model": "CC4",
+  "protocol": "CPCL",
+  "printableWidthMm": 104,
+  "supportsNativeQRCode": true,
+  "supportsNativeBarcode": true,
+  "dpi": null,
+  "mmToDotScale": null,
+  "fontMap": {
+    "builtin": {
+      "sizesMm": [3, 4, 6, 8],
+      "notes": "优先映射到 CC4 内置 ASCII/GBK 字库档位；不匹配时走位图"
+    }
+  },
+  "imageConstraints": {
+    "maxAspect": { "w": 9, "h": 16 }
+  },
+  "cpclDialect": {
+    "textRotationNative": [0, 90, 180, 270],
+    "qrNative": true
+  },
+  "ble": {
+    "serviceUUID": null,
+    "writeCharacteristicUUID": null,
+    "notifyCharacteristicUUID": null,
+    "writeMode": "withResponse",
+    "packetIntervalMs": 20,
+    "maxChunkBytes": null,
+    "retry": {
+      "maxAttempts": 3,
+      "backoffMs": [100, 200, 400]
+    }
+  }
+}
+```
+
+## 打印流水线（建议接口分层）
+
+> 目的：让“小程序端”和“Android H5 端”尽量复用核心逻辑，只替换传输实现。
+
+建议分层：
+
+1. **TemplateEngine**
+  - 输入：`template` + `data`（变量替换）
+  - 输出：`resolvedTemplate`（所有 `{{}}` 已替换）
+2. **LayoutScaler**
+  - 输入：`resolvedTemplate` + `printerProfile.printableWidthMm`
+  - 输出：`scaledTemplate`（按 `fitWidth` 缩放后的 mm 坐标）
+3. **Rasterizer（位图层）**
+  - 输入：`scaledTemplate`（挑选需位图的元素：图片、任意字体、任意角度旋转等）
+  - 输出：`bitmapSlices[]`（按 slice 切片的 1bpp 位图块，带位置与尺寸）
+4. **CPCLCompiler（指令层）**
+  - 输入：`scaledTemplate`（挑选可原生的元素：文本、码类等） + `bitmapSlices[]`
+  - 输出：`cpclJobBytes`（完整 CPCL 作业字节流）
+5. **Transport（传输层）**
+  - 输入：`cpclJobBytes` + `printerProfile.ble`
+  - 输出：打印结果（成功/失败原因分类、可重试）
+
+## CPCL 作业字节流组织（建议）
+
+> 不同厂商 CPCL 方言会在“作业头/结束命令/位图命令”上存在差异，建议通过 `printerProfile.cpclDialect` 收口。
+
+建议逻辑结构（概念级）：
+
+- **Job Header**
+  - 设置页面宽高（dot）
+  - 设置打印份数
+  - 初始化/清屏（若需要）
+- **Body**
+  - 先输出位图切片（背景/图片/任意旋转/任意字体）
+  - 再输出原生文本/二维码/条码（保证清晰与可扫）
+- **Job Footer**
+  - 结束作业并触发打印
+
+字符编码建议：
+- 文本默认按机型支持：GBK/UTF-8（由 profile 选择与转换）
+
+## `fitWidth` 缩放算法（定稿细化）
+
+设：
+
+- 模板画布宽：`canvasWidthMm`
+- 机型可打印宽：`printableWidthMm`
+
+缩放系数：
+
+`scale = min(1, printableWidthMm / canvasWidthMm)`
+
+对模板中所有元素应用：
+
+- `xMm *= scale`
+- `yMm *= scale`
+- `widthMm *= scale`
+- `heightMm *= scale`
+
+对文本字号（若使用 mm 表示字号）同样按比例缩放；若最终字体映射无法满足，则降级为位图渲染。
+
+## mm → dot 换算与校准
+
+### 基本换算
+
+`dots = mm * (dpi / 25.4)`
+
+若采用标定值：
+
+`dots = mm * mmToDotScale`
+
+### 标尺校准建议（落地）
+
+- 打印一条标尺：目标长度 `targetMm = 100`
+- 实测打印长度 `measuredMm`
+- 校正系数：
+
+`k = targetMm / measuredMm`
+
+- 若已有临时 `mmToDotScale0`，更新为：
+
+`mmToDotScale = mmToDotScale0 * k`
+
+## CPCL 子集（首版必须支持）
+
+首版仅定义“需要的 CPCL 能力子集”，避免后续扩展时出现不可控差异。
+
+### 页面与作业控制
+
+- 设置页面/标签尺寸（宽高，单位为 dot）
+- 设置打印份数
+- 走纸/结束作业（根据机型方言做适配）
+
+### 文本（原生优先）
+
+- 支持 ASCII + GBK（由机型内置字库决定）
+- 支持旋转：0/90/180/270（其余角度走位图）
+- 对齐：编辑器对齐最终体现为坐标计算，不依赖打印机“对齐命令”
+
+### 二维码/条码（原生优先）
+
+- QRCode（原生命令）
+- CODE128（或业务需要的一维码集合）
+
+### 位图（图片元素必需）
+
+- 支持将图片元素输出为单色位图并打印
+- 支持切片打印（按行/按块）
+
+## 元素到输出的映射规则（定稿细化）
+
+### Text
+
+- 满足以下条件时走 CPCL 原生：
+  - `rotationDeg` 属于 {0,90,180,270}
+  - 字体为 `builtin` 且字号可映射
+- 否则：转位图（文字渲染为黑白位图）并走位图打印
+
+### QRCode / Barcode
+
+- 若机型 `supportsNativeQRCode/Barcode` 为 true：走原生命令
+- 否则：转位图（不推荐，但作为兜底）
+
+### Image
+
+- 永远走位图打印
+- 处理模式：
+  - `logo`：优先保边缘、少抖动
+  - `background`：抖动更均匀，避免大块黑糊
+  - `photo`：更强抖动/灰度映射（更慢，需提示）
+
+## 图片位图化与切片发送（建议）
+
+### 位图基础约束
+
+- 输出为 1bpp（黑/白）
+- 图片元素必须满足最大比例 9:16（宽:高）；超限时编辑器端先等比缩放
+
+### 切片策略（推荐按“行切片”）
+
+将位图按固定行高切片（例如 16 或 24 dot 高一片），每片作为独立位图块打印，以降低单次写入的数据量与失败重试成本。
+
+建议：
+
+- `sliceHeightDots`：可在 `printerProfile` 配置（不同机型吞吐不同）
+- 切片时保持 X/Y 偏移一致，按 slice 累加 Y
+
+## BLE 传输约定（小程序 + Android H5）
+
+本节定义“可靠发送”的共识规则。具体 MTU/写入模式由 `printerProfile.ble` 覆盖。
+
+### 小程序（wx.* BLE）
+
+- 使用 `wx.writeBLECharacteristicValue`
+- 建议默认 `withResponse`（更稳），并通过 `packetIntervalMs` 节流
+- 分包大小：
+  - 若可获取 MTU：使用 `ATT_MTU - 3`
+  - 否则以 profile 配置或保守值（例如 20 字节）为准
+
+### Android H5（Web Bluetooth）
+
+- `navigator.bluetooth.requestDevice`（必须用户手势触发）
+- 连接后通过 GATT 获取可写特征，写入采用 chunk + 节流
+- 仅作为补充通道，能力与表现不作为 iOS 主通道承诺
+
+## 验收用例（建议首批必测）
+
+### 连接与稳定性
+
+- 首次扫描→连接成功（10 次中 ≥ 9 次）
+- 断连后重连成功
+
+### 文本
+
+- 中英文混排（GBK/ASCII）
+- 多字号（通过内置映射）
+- 0/90/180/270 旋转
+
+### 二维码
+
+- QRCode（打印后可被主流扫码器识别）
+
+### 图片
+
+- 小 Logo（mode=logo）清晰可辨
+- 大背景（mode=background）不出现明显断层（允许抖动纹理）
+- 照片（mode=photo）可接受（允许较慢，需 UI 提示）
+
+### 宽度适配
+
+- 模板 110mm 宽在 CC4(104mm) 上自动缩放并提示缩放比例
+
+## 机型认证流程（建议：生成/更新 printerProfile）
+
+> 目标：把“支持机型清单”变成可操作流程，而不是手工猜 UUID/参数。
+
+### 1. 发现与筛选
+
+- 小程序端扫描 BLE 设备
+- 通过设备名（如包含 `CC4`）与服务 UUID 粗筛（若已知）
+
+### 2. 连接与枚举 GATT
+
+- 连接成功后：
+  - 枚举 services
+  - 对每个 service 枚举 characteristics
+  - 记录每个 characteristic 的 properties（read/write/notify/indicate）
+
+### 3. 确认写入通道
+
+- 选择候选 `writeCharacteristicUUID`：
+  - 优先 `write` 或 `writeWithoutResponse` 的特征
+- 发送一段最小“测试作业”（例如仅打印一行文本或一个小 QR）
+- 若能成功出纸，则确认该 writeChar
+
+### 4. MTU / 分包参数探测
+
+- 若平台支持读取 MTU（或可观察吞吐/失败率）：
+  - 逐步增大 chunk（从 20 开始）直到出现失败，再回退
+  - 选择稳定的 `maxChunkBytes` 与 `packetIntervalMs`
+
+### 5. DPI / 比例标定
+
+- 打印 100mm 标尺
+- 实测长度，写入 `mmToDotScale`（或等效 dpi）
+
+### 6. 固化 profile
+
+- 输出/保存 `printerProfile`（云端下发或内置）
+- 将机型加入“已认证机型清单”
 
