@@ -49,7 +49,7 @@ npm run web:dev
 
 ### 2.2 需要在 GitHub 配置的 Secrets（Repository 还是 Environment？）
 
-当前工作流 `.github/workflows/deploy-cloudflare.yml` 使用的是：
+当前两个工作流 `.github/workflows/deploy-workers.yml` 与 `.github/workflows/deploy-pages.yml` 都使用：
 
 ```yaml
 secrets.CLOUDFLARE_API_TOKEN
@@ -60,8 +60,8 @@ secrets.CLOUDFLARE_ACCOUNT_ID
 
 | 类型 | 路径（UI） | 适用场景 |
 |------|------------|----------|
-| **Repository secrets** | 仓库 → **Settings** → **Secrets and variables** → **Actions** → **Repository secrets** | 最简单：本仓库所有工作流默认可用（当前 workflow 未声明 `environment:`，**推荐放这里**） |
-| **Environment secrets** | 仓库 → **Settings** → **Environments** → 选中某环境（如 `production`）→ **Environment secrets** | 需要按环境隔离（prod/staging）、审批、保护分支时再使用；若用这类，需在 workflow 的 `job` 上增加 `environment: <name>`，并把 `secrets.*` 改为该环境下的值 |
+| **Repository secrets** | 仓库 → **Settings** → **Secrets and variables** → **Actions** → **Repository secrets** | 最简单：本仓库两个 workflow 默认可用（当前未声明 `environment:`，**推荐放这里**） |
+| **Environment secrets** | 仓库 → **Settings** → **Environments** → 选中某环境（如 `production`）→ **Environment secrets** | 需要按环境隔离（prod/staging）、审批、保护分支时再使用；若用这类，需在对应 `job` 上增加 `environment: <name>`，并把 `secrets.*` 改为该环境下的值 |
 
 **推荐（与现有一致）**：把下面两个变量配成 **Repository secrets**：
 
@@ -70,10 +70,7 @@ secrets.CLOUDFLARE_ACCOUNT_ID
 
 若你改为使用 **Environment secrets**，请同时修改 workflow：在 `deploy` job 下增加 `environment: 你的环境名`，否则 job 读不到 Environment 里的 secrets。
 
-并在工作流中使用 worker 名称：
-
-- `main` 分支固定部署为：**`h5-pos-print`**
-- 其他分支部署为：`h5-pos-print-<branch>`（避免互相覆盖）
+Workers workflow 默认按 `wrangler.toml` 中的名称部署，也可通过变量覆盖 deploy 命令。
 
 > 如果你使用自定义域名，还需要在 Cloudflare DNS/域名里完成解析与 HTTPS 证书验证（Cloudflare 会自动处理大多数情况）。
 
@@ -81,25 +78,26 @@ secrets.CLOUDFLARE_ACCOUNT_ID
 
 - `wrangler.toml`：Workers 项目配置（静态资源目录 `dist-web`）
 - `worker/index.ts`：最小 Worker，转发静态资源（并为 Web Bluetooth 测试页添加必要的安全响应头）
-- `.github/workflows/deploy-cloudflare.yml`：GitHub Actions **同时**部署 **Workers** 与 **Pages**
+- `.github/workflows/deploy-workers.yml`：GitHub Actions 单独部署 **Workers**
+- `.github/workflows/deploy-pages.yml`：GitHub Actions 单独部署 **Pages**
 
 一次 `push` 后的流程简述：
 
-1. **build**：`npm ci` + `npm run web:build`，产出 `dist-web/`，上传为 artifact  
-2. **deploy-workers** 与 **deploy-pages**：**并行**执行，共用同一份 `dist-web`
+1. **Pages workflow**：`npm ci` + `npm run web:build`，然后执行 `wrangler pages deploy dist-web`
+2. **Workers workflow**：`npm ci` + `npm run web:build`，然后执行 `wrangler deploy`
 
 Workers：
 
-- **所有分支 push 都会部署**
-- Worker 名称：
-  - `main` → `h5-pos-print`
-  - 其他分支 → `h5-pos-print-<sanitized-branch>`
+- 默认按 `main` 分支自动部署
+- 若需调整工作目录或 deploy 命令，可使用仓库变量：
+  - `CLOUDFLARE_WORKERS_WORKING_DIRECTORY`
+  - `CLOUDFLARE_WORKERS_DEPLOY_COMMAND`
 
 Pages：
 
-- **需在 Cloudflare 控制台先创建同名 Pages 项目**（默认项目名 `h5-pos-print`，与 Worker 基名一致）
-- `main`：`wrangler pages deploy dist-web --project-name=<项目名>`（**生产**部署）
-- 其他分支：同上并带 `--branch=<分支名>`（**预览**部署，URL 在 Cloudflare Pages 控制台查看）
+- **需在 Cloudflare 控制台先创建同名 Pages 项目**
+- 默认使用 `dist-web` 作为发布目录
+- 默认项目名取仓库变量 `CLOUDFLARE_PAGES_PROJECT_NAME`，未设置时退回当前仓库名
 
 ### 2.4 Actions 工作流读取的密钥（与 2.2 对应）
 
@@ -112,11 +110,12 @@ Pages：
 
 **可选：**
 
-- `CLOUDFLARE_PAGES_PROJECT_NAME`：Pages 项目名称；**未设置时默认 `h5-pos-print`**（须与你在 Cloudflare 里创建的 Pages 项目名一致）
+- `CLOUDFLARE_PAGES_PROJECT_NAME`：Pages 项目名称；未设置时默认当前仓库名
+- `CLOUDFLARE_PAGES_DEPLOY_DIR`：Pages 发布目录；未设置时按 `dist-web`、`site`、`public` 顺序查找
+- `CLOUDFLARE_WORKERS_WORKING_DIRECTORY`：Workers 发布工作目录
+- `CLOUDFLARE_WORKERS_DEPLOY_COMMAND`：Workers 自定义 deploy 命令
 
-未使用：
-
-- `CLOUDFLARE_WORKER_NAME`（Worker 名仍由分支规则自动计算）
+若未设置上述可选变量，当前仓库也可以按默认配置直接部署。
 
 ## 3. 访问地址与 HTTPS 要求
 

@@ -1,6 +1,6 @@
 # H5_POS_PRINT
 
-蓝牙标签打印文档仓库，当前以 CPCL 标签打印方案为主，重点覆盖：
+蓝牙标签打印仓库，当前同时包含文档、TypeScript 打印核心、H5 Web Bluetooth 测试台，以及 Cloudflare 部署配置，重点覆盖：
 
 - 模板与机型解耦
 - 按机型宽度自动缩放
@@ -13,12 +13,13 @@
 
 - `.github/workflows/deploy-pages.yml`
   - 仅负责 Cloudflare Pages 发布
-  - 默认查找 `dist-web/`、`site/`、`public/` 目录
-  - 可配置仓库变量：`CLOUDFLARE_PAGES_PROJECT_NAME`、`CLOUDFLARE_PAGES_DEPLOY_DIR`
+  - 负责 `npm ci` + `npm run web:build`，再部署 `dist-web/`
+  - 可配置仓库变量：`CLOUDFLARE_PAGES_PROJECT_NAME`
 - `.github/workflows/deploy-workers.yml`
   - 仅负责 Cloudflare Workers 发布
-  - 默认查找 `wrangler.toml` 或 `wrangler.jsonc`
-  - 可配置仓库变量：`CLOUDFLARE_WORKERS_WORKING_DIRECTORY`、`CLOUDFLARE_WORKERS_DEPLOY_COMMAND`
+  - 负责 `npm ci` + `npm run web:build`，再执行 `wrangler deploy`
+  - 默认读取仓库根目录 `wrangler.toml`
+  - 可配置仓库变量：`CLOUDFLARE_WORKERS_WORKING_DIRECTORY`
 
 两个 workflow 共用以下 GitHub Secrets：
 
@@ -27,8 +28,9 @@
 
 说明：
 
-- 当前仓库还没有实际的 Pages 构建产物或 Workers 配置文件，所以这两个 workflow 会在缺少目标文件时自动跳过，而不是直接失败
-- 后续接入正式项目时，只需要补上 `dist-web/` 和 `wrangler` 配置即可启用实际部署
+- 当前仓库已经包含 `package.json`、`web/`、`worker/`、`wrangler.toml`，两份 workflow 会直接构建并部署
+- 若需要修改 Pages 项目名，设置 `CLOUDFLARE_PAGES_PROJECT_NAME`
+- 若 Worker 工程未来迁移到子目录，可设置 `CLOUDFLARE_WORKERS_WORKING_DIRECTORY`
 
 ## 文档索引
 
@@ -46,10 +48,16 @@
 
 ## 当前范围
 
-当前仓库主要沉淀文档，不包含正式的打印 SDK 或示例工程。若开始实现，建议优先按以下顺序推进：
+当前仓库已经包含可继续演进的实现骨架：
 
-1. 固化 `printerProfile` 数据结构
-2. 实现模板校验与 `fitWidth` 缩放
-3. 建立 IR 与 CPCL 驱动层
-4. 接入 BLE 分包发送与错误码映射
-5. 用认证机型清单逐台验收
+- `src/`：打印核心与协议映射
+- `web/`：H5 Web Bluetooth 测试台
+- `worker/`：Cloudflare Worker 入口
+- `docs/`：方案规格、实现指南、真机测试说明
+
+建议后续优先推进：
+
+1. 固化 `printerProfile` 数据结构与机型清单
+2. 补充核心库测试与样例输入输出
+3. 完善真机兼容性验证与认证机型数据
+4. 按业务需要补齐小程序端接入

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - "cursor/**"
   workflow_dispatch:
 
 concurrency:
@@ -19,6 +20,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: npm run web:build
 
       - name: Resolve Worker deploy command
         id: resolve

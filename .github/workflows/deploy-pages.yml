@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - "cursor/**"
   workflow_dispatch:
 
 concurrency:
@@ -20,6 +21,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: npm run web:build
 
       - name: Resolve Pages deploy target
         id: resolve
@@ -46,7 +59,7 @@ jobs:
 
           project_name="${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}"
           if [[ -z "$project_name" ]]; then
-            project_name="${GITHUB_REPOSITORY##*/}"
+            project_name="h5-pos-print"
           fi
 
           echo "should_deploy=true" >> "$GITHUB_OUTPUT"
