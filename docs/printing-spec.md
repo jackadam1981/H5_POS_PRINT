@@ -1,5 +1,7 @@
 # 蓝牙标签打印（CPCL）方案规格（定稿）
 
+> 配套实现说明见：[`docs/printing-implementation-guide.md`](./printing-implementation-guide.md)
+
 ## 目标与范围
 
 本规格用于实现「公众用户」场景下的标签打印能力，采用**双通道**：
